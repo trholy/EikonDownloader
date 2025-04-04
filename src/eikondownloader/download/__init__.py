@@ -1,4 +1,4 @@
-from downloading import EikonDownloader, OSDownloader
+from .downloading import EikonDownloader, OSDownloader
 
 __all__ = [
     "EikonDownloader",

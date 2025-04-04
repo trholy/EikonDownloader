@@ -1,10 +1,6 @@
-from download import EikonDownloader, OSDownloader
-from upload import OSUploader
-from processing import DataProcessor
+__version__ = "0.1.0"
+__author__ = "Thomas R. Holy"
 
-__all__ = [
-    "EikonDownloader",
-    "OSDownloader",
-    "DataProcessor",
-    "OSUploader",
-]
+from .download import EikonDownloader, OSDownloader
+from .upload import OSUploader
+from .processing import DataProcessor

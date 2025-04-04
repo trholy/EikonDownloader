@@ -1,4 +1,4 @@
-from processor import DataProcessor
+from .processor import DataProcessor
 
 __all__ = [
     "DataProcessor"

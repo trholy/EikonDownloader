@@ -1,4 +1,4 @@
-from uploading import OSUploader
+from .uploading import OSUploader
 
 __all__ = [
     "OSUploader",
