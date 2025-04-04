@@ -1,11 +1,24 @@
 import pandas as pd
 import numpy as np
 import eikon as ek
+from minio import Minio
+from minio.error import S3Error
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional, Tuple, Union
 from datetime import datetime
+import hashlib
 import logging
 import time
+import os
+import re
+
+
+# Configure logging to remove the default prefix
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(message)s',
+)
 
 
 class EikonDownloader:
@@ -821,3 +834,255 @@ class EikonDownloader:
         else:
             raise TypeError(
                 f"Expected tuple or DataFrame, got {type(object_).__name__}")
+
+
+class OSDownloader:
+    def __init__(
+            self,
+            endpoint: str,
+            access_key: str,
+            secret_key: str,
+            files_path: str,
+            secure: bool = False,
+            log_downloads: bool = True,
+            log_files_path: str = "log_files_OSDownloader",
+            workers: int = 1,
+    ):
+        """
+        Initializes the OSDownloader.
+        """
+        self.client = Minio(
+            endpoint,
+            access_key=access_key,
+            secret_key=secret_key,
+            secure=secure
+        )
+        self.workers = workers
+        self.files_path = files_path
+        self.log_downloads = log_downloads
+        self.log_files_path = log_files_path
+
+        self.remote_files = []
+        self.downloaded_files = []
+        self.corrupted_files = []
+
+        # Create directories if they don't exist
+        self._ensure_directory_exists(self.log_files_path)
+
+        self.logger = logging.getLogger(__name__)
+
+    @staticmethod
+    def _ensure_directory_exists(
+            path: str
+    ) -> None:
+        """
+        Helper function to ensure a directory exists, creates if not.
+        """
+        if not os.path.exists(path):
+            os.makedirs(path, exist_ok=True)
+
+    def _ensure_bucket(
+            self,
+            bucket_name
+    ) -> None:
+        """
+        Ensure the bucket exists.
+        """
+        if self.client.bucket_exists(bucket_name):
+            self.logger.info(f"Bucket {bucket_name} exists")
+        else:
+            self.logger.error(f"Bucket {bucket_name} does not exists")
+
+    @staticmethod
+    def calculate_md5(
+            file_path: str
+    ) -> str:
+        """Computes the MD5 hash of a file."""
+        hash_md5 = hashlib.md5()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest()
+
+    @staticmethod
+    def _get_current_date() -> str:
+        """
+        Get the current system date, formatted as "DD-MMM-YYYY-HH-MM".
+
+        :return: Current date in formatted datetime format.
+        """
+        # Get current datetime
+        now = datetime.now()
+
+        # Format as string and parse back to enforce "DD-MMM-YYYY-HH:MM" format
+        formatted_str = now.strftime("%d-%b-%Y-%H-%M")
+
+        return formatted_str
+
+    def _get_remote_files(
+            self,
+            bucket_name: str,
+            folder_prefix: str,
+    ) -> list:
+        """
+        Retrieve a list of remote files from MinIO.
+        """
+        remote_files = list(self.client.list_objects(
+            bucket_name,
+            prefix=folder_prefix,
+            recursive=True
+        ))
+
+        if not remote_files:
+            self.logger.warning(
+                f"No files found in bucket '{bucket_name}'"
+                f" with prefix '{folder_prefix}'.")
+
+        return remote_files
+
+    def download_bucket(
+            self,
+            bucket_name: str,
+            folder_prefix: Optional[str] = None
+    ) -> None:
+        """
+        Recursively downloads a bucket or folder from MinIO.
+        """
+        self._ensure_bucket(bucket_name)
+        remote_files = self._get_remote_files(bucket_name, folder_prefix)
+
+        if not remote_files:
+            self.logger.info(
+                f"No files to download from bucket '{bucket_name}'"
+                f" with prefix '{folder_prefix}'.")
+            return  # Exit early if no files
+
+        files_to_download = []
+        for obj in remote_files:
+            remote_path = obj.object_name
+            self.remote_files.append(remote_path)
+            local_file_path = os.path.join(self.files_path, remote_path)
+
+            # Ensure the directory exists
+            os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+
+            # Skip if the file already exists and matches hash
+            if os.path.exists(local_file_path) and self._verify_file_integrity(
+                    bucket_name, local_file_path, remote_path):
+                self.logger.info(
+                    f"Skipping already downloaded file: {remote_path}")
+                continue
+
+            files_to_download.append((local_file_path, remote_path))
+
+        if not files_to_download:
+            self.logger.info("All files are already downloaded and verified.")
+            return  # Exit early
+
+        self.logger.info(
+            f"Starting download of {len(files_to_download)} files...")
+
+        # Parallel Download with Real-time Logging
+        with ThreadPoolExecutor(max_workers=self.workers) as executor:
+            futures = {
+                executor.submit(self._download_file, bucket_name, local,
+                                remote): (local, remote)
+                for local, remote in files_to_download
+            }
+
+            for future in as_completed(futures):
+                local_file_path, remote_path = futures[future]
+                try:
+                    if future.result():
+                        self.downloaded_files.append(remote_path)
+                        self.logger.info(
+                            f"Successfully downloaded: {remote_path}")
+                    else:
+                        self.corrupted_files.append(remote_path)
+                        self.logger.warning(
+                            f"Hash mismatch: {remote_path}"
+                            f"(Possible corruption)")
+
+                except Exception as e:
+                    self.logger.error(f"Error downloading {remote_path}: {e}")
+
+        # Final summary logs
+        self.logger.info(
+            f"Downloaded {len(self.downloaded_files)} files successfully.")
+        if self.corrupted_files:
+            self.logger.warning(
+                f"{len(self.corrupted_files)} files may be corrupted.")
+
+        # Log downloads if enabled
+        if self.log_downloads:
+            time_stamp = self._get_current_date()
+            formatted_time_stamp = re.sub(r"[-:\s]", "_", time_stamp)
+
+            self._write_log_file(
+                f"{self.log_files_path}/"
+                f"OSDownloader_downloaded_files_{formatted_time_stamp}.log",
+                self.downloaded_files)
+            self._write_log_file(
+                f"{self.log_files_path}/"
+                f"OSDownloader_corrupted_files_{formatted_time_stamp}.log",
+                self.corrupted_files)
+
+    def _download_file(
+            self,
+            bucket_name: str,
+            local_file_path: str,
+            remote_path: str
+    ) -> bool:
+        """
+        Downloads a single file with immediate logging and integrity check.
+        """
+        try:
+            self.client.fget_object(bucket_name, remote_path, local_file_path)
+
+            # Verify integrity after download
+            return self._verify_file_integrity(bucket_name, local_file_path,
+                                               remote_path)
+
+        except S3Error as e:
+            self.logger.error(
+                f"Failed to download {remote_path} due to S3 error: {e}")
+        except Exception as e:
+            self.logger.error(
+                f"Unexpected error downloading {remote_path}: {e}")
+
+        return False
+
+    def _verify_file_integrity(
+            self,
+            bucket_name: str,
+            local_file_path: str,
+            remote_path: str
+    ) -> bool:
+        """
+        Verifies if the local file matches the remote file's checksum.
+        """
+        try:
+            local_md5 = self.calculate_md5(local_file_path)
+            obj_stat = self.client.stat_object(bucket_name, remote_path)
+            return obj_stat.etag == local_md5
+
+        except Exception as e:
+            self.logger.error(
+                f"Error verifying file integrity for {remote_path}: {e}")
+            return False
+
+    def _write_log_file(
+            self,
+            filename: str,
+            data: list
+    ) -> None:
+        """
+        Writes a list of file links to a log file, ensuring each entry
+         is on a new line.
+        """
+        try:
+            with open(filename, "w", encoding="utf-8") as file:
+                file.write("\n".join(data) + "\n")
+            self.logger.info(f"Saved log: {filename} ({len(data)} entries)")
+        except Exception as e:
+            self.logger.error(f"Error writing log file {filename}: {e}")
