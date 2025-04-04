@@ -196,6 +196,6 @@ Thomas R. Holy ([thomas.robert.holy@gmail.com](mailto:thomas.robert.holy@gmail.c
 
 ## Contributing
 
-If you’d like to contribute to the development of `dwdown`, feel free to fork the repository, create a branch for your feature or fix, and submit a pull request.
+If you’d like to contribute to the development of `eikondownloader`, feel free to fork the repository, create a branch for your feature or fix, and submit a pull request.
 
 ---
