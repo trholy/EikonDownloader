@@ -1,0 +1,18 @@
+site_name: eikondownloader Documentation
+theme:
+  name: material
+
+nav:
+  - Home: README.md
+  - Downloader Module:
+      - DWDDownloader: download/EikonDownloader.md
+      - MinioDownloader: download/OSDownloader.md
+  - Uploader Module:
+      - MinioUploader: upload/OSUploader.md
+  - Processing Module:
+      - DataProcessor: processing/DataProcessor.md
+
+# Ensure images are served correctly
+markdown_extensions:
+  - attr_list
+  - md_in_html
