@@ -1,7 +1,10 @@
-from download import EikonDownloader
+from download import EikonDownloader, OSDownloader
+from upload import OSUploader
 from processing import DataProcessor
 
 __all__ = [
     "EikonDownloader",
-    "DataProcessor"
+    "OSDownloader",
+    "DataProcessor",
+    "OSUploader",
 ]
