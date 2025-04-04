@@ -7,6 +7,13 @@ import glob
 import os
 
 
+# Configure logging to remove the default prefix
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(message)s',
+)
+
+
 class DataProcessor:
     def __init__(
             self,
