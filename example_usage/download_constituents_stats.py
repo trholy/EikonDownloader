@@ -125,7 +125,7 @@ for index_name in indices_list:
                 path_or_buf=f"{additional_stock_data_path}"
                             f"{index_name}_additional_stock_data_{target_date}.csv",
                 sep=",",
-                index=True
+                index=False
             )
             logger.info(
                 f"Saved {index_name} at {target_date}"
