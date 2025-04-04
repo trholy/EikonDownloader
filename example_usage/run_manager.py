@@ -14,7 +14,7 @@ def run_script(
 
 script_list = [
     "download_index_chain",
-    "download_index_timeseries",
+    "download_time_series",
     "download_index_stats",
     "download_constituents_stats",
     ]
