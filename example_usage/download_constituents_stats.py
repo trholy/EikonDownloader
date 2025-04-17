@@ -92,7 +92,7 @@ for index_name in indices_list:
     for target_date in target_dates:
         logger.info(f"\nActual target date for {index_name}: {target_date}")
 
-        chunked_uni_rics = data_processor.split_list(uni_rics, 100)
+        chunked_uni_rics = data_processor.split_list(uni_rics, 2000)
 
         additional_stock_data_df_list = []
         for part, rics in enumerate(chunked_uni_rics):
