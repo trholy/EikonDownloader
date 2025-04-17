@@ -27,6 +27,7 @@ class EikonDownloader:
             api_key: str,
             request_delay: Optional[Union[int, float]] = 1,
             request_limit_delay: Optional[Union[int, float]] = 3600,
+            proxy_error_delay: Optional[Union[int, float]] = 3600,
             error_delay: Optional[Union[int, float]] = 5,
     ):
         """
@@ -41,6 +42,8 @@ class EikonDownloader:
          to avoid overwhelming the server. Default is 1 second.
         :param request_limit_delay: The delay (in seconds) when the request
          limit is reached. Default is 3600 seconds (1 hour).
+        :param proxy_error_delay: The delay (in seconds) when the proxy can't
+         be reached. Default is 3600 seconds (1 hour).
         :param error_delay: The delay (in seconds) to wait after encountering
          an error. Default is 5 seconds.
 
@@ -48,6 +51,7 @@ class EikonDownloader:
         """
         self.request_delay = request_delay
         self.request_limit_delay = request_limit_delay
+        self.proxy_error_delay = proxy_error_delay
         self.error_delay = error_delay
 
         ek.set_app_key(api_key)
@@ -249,6 +253,14 @@ class EikonDownloader:
                         f"Skipping download of {index_ric} at {target_date}."
                     )
                     return self._empty_df_chain(index_ric), f"Error: {err.code}"
+
+                elif err.code == 401:
+                    self.logger.warning(
+                        f"Eikon Proxy not running or cannot be reached."
+                        f" Sleeping for {self.proxy_error_delay} minutes."
+                    )
+                    self._apply_proxy_error_delay()
+
                 elif err.code == 429:
                     self.logger.warning(
                         f"Request limit reached. Sleeping for"
@@ -544,7 +556,13 @@ class EikonDownloader:
                             f" {self.request_limit_delay} minutes."
                         )
                         self._apply_request_limit_delay()
-                        retries += 1  # Increment retry count
+
+                    elif err.code == 401:
+                        self.logger.warning(
+                            f"Eikon Proxy not running or cannot be reached."
+                            f" Sleeping for {self.proxy_error_delay} minutes."
+                        )
+                        self._apply_proxy_error_delay()
 
                     else:
                         self.logger.info(
@@ -715,6 +733,13 @@ class EikonDownloader:
                     return self._empty_df_data(rics,
                                                fields), f"Error: {err.code}"
 
+                elif err.code == 401:
+                    self.logger.warning(
+                        f"Eikon Proxy not running or cannot be reached."
+                        f" Sleeping for {self.proxy_error_delay} minutes."
+                    )
+                    self._apply_proxy_error_delay()
+
                 elif err.code == 429:
                     self.logger.warning(
                         f"Rate limit hit. Sleeping"
@@ -801,6 +826,17 @@ class EikonDownloader:
         if isinstance(self.request_limit_delay,
                       (int, float)) and self.request_limit_delay > 0:
             time.sleep(self.request_limit_delay)
+
+    def _apply_proxy_error_delay(self) -> None:
+        """
+        Applies a delay when the proxy is not running or can't be reached,
+         based on the specified delay time.
+
+        :return: None
+        """
+        if isinstance(self.proxy_error_delay,
+                      (int, float)) and self.proxy_error_delay > 0:
+            time.sleep(self.proxy_error_delay)
 
     @staticmethod
     def _unpack_tuple(
