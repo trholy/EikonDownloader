@@ -744,7 +744,10 @@ class EikonDownloader:
         )
         return self._empty_df_data(rics, fields), "Max retries exceeded."
 
-    def _empty_df_chain(self, ric: str) -> pd.DataFrame:
+    @staticmethod
+    def _empty_df_chain(
+            ric: str
+    ) -> pd.DataFrame:
         """
         Creates an empty DataFrame with a single column corresponding to the
          given RIC, filled with NaN values.
