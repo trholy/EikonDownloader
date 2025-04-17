@@ -26,7 +26,18 @@ indices_list = [
     'FTSE',
 ]
 
-start_date = "2020-01-01"
+# RIC replacement dict for not available sources
+name_mapping = True
+name_mapping_dict = {
+    'SPX': 'SP500',
+    'IDX': 'SP400',
+    'N225': 'N225E',
+    'SPCY': 'SP600',
+    'SPMIDSM': 'SP1000',
+    'SPSUP': 'SPCOMP'
+}
+
+start_date = "2000-01-01"
 end_date = "2024-12-31"
 
 # Loop through indices
@@ -62,7 +73,7 @@ for index_name in indices_list:
 
     # Get index time series
     index_df = downloader.get_index_timeseries(
-        index_ric=index_name,
+        index_ric=name_mapping_dict.get(index_name, index_name),
         end_date=end_date,
         num_years=None,
         start_date=start_date,

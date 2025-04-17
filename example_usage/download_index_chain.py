@@ -26,6 +26,17 @@ indices_list = [
     'FTSE',
 ]
 
+# RIC replacement dict for not available sources
+name_mapping = True
+name_mapping_dict = {
+    'SP500': 'SPX',
+    'SP400': 'IDX',
+    # 'N225': 'N225E',
+    'SP600': 'SPCY',
+    'SP1000': 'SPMIDSM',
+    'SPCOMP': 'SPSUP'
+}
+
 # Data fields to download
 data_fields = [
     'TR.ISIN',
@@ -50,6 +61,11 @@ logger.info(f"Target dates:\n{target_dates}")
 
 # Loop through indices and target dates
 for index_name in indices_list:
+
+    # Replace index_name, because source is may not available
+    if name_mapping:
+        index_name = name_mapping_dict.get(index_name, index_name)
+
     for target_date in target_dates:
 
         logger.info(f"\nActual target date for {index_name}: {target_date}")

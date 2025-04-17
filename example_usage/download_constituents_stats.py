@@ -27,6 +27,15 @@ indices_list = [
     'FTSE',
 ]
 
+# RIC replacement dict for not available sources
+name_mapping = False
+name_mapping_dict = {
+    'IDX': 'SP400',
+    'SPCY': 'SP600',
+    'SPMIDSM': 'SP1000',
+    'SPSUP': 'SPCOMP'
+}
+
 # Data fields to download
 data_fields = [
     'TR.TRBCEconomicSector',
@@ -59,6 +68,10 @@ logger.info(f"Target dates:\n{target_dates}\n")
 
 # Loop through indices
 for index_name in indices_list:
+
+    # Replace index_name, because source is may not available
+    if name_mapping:
+        index_name = name_mapping_dict.get(index_name, index_name)
 
     # Initialize data_processor
     data_processor = DataProcessor(

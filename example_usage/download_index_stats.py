@@ -26,6 +26,17 @@ indices_list = [
     'FTSE',
 ]
 
+# RIC replacement dict for not available sources
+name_mapping = True
+name_mapping_dict = {
+    'SP500': 'SPX',
+    'SP400': 'IDX',
+    # 'N225': 'N225E',
+    'SP600': 'SPCY',
+    'SP1000': 'SPMIDSM',
+    'SPCOMP': 'SPSUP'
+}
+
 # Initialize downloader
 downloader = EikonDownloader(
     api_key=api_key,
@@ -60,6 +71,10 @@ logger.info(
 
 # Loop through indices
 for index_name in indices_list:
+
+    # Replace index_name, because source is may not available
+    if name_mapping:
+        index_name = name_mapping_dict.get(index_name, index_name)
 
     # Initialize data_processor
     data_processor = DataProcessor(
