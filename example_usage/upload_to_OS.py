@@ -1,13 +1,13 @@
 from eikondownloader.upload import OSUploader
 
 
-# Initialize MinioUploader
+# Initialize OSUploader
 uploader = OSUploader(
     endpoint="your-minio-sever.com",
     access_key="your-access-key",
     secret_key="your-secret-key",
     files_path="download",  # Path for files to upload
-    bucket_name="stock-dataset",  # Name of the minio bucket
+    bucket_name="stock-series-dataset-2025-04-12",  # Name of the minio bucket
     secure=True,  # If "true" API requests will be secure (HTTPS), and insecure (HTTP) otherwise
     log_uploads=True,  # Log upload status
     log_files_path="log_files",  # Path for log files
