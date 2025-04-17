@@ -178,7 +178,7 @@ class EikonDownloader:
             target_date: Union[str, datetime],
             fields: Union[str, List[str]],
             parameters: Optional[dict] = None,
-            max_retries: int = 10,
+            max_retries: int = 5,
             pre_fix: Optional[str] = "0#."
     ) -> Tuple[pd.DataFrame, Optional[str]]:
         """
@@ -200,7 +200,7 @@ class EikonDownloader:
         :param parameters: Optional dictionary of additional parameters for
          the request (default is None).
         :param max_retries: The maximum number of retries to attempt in case
-         of failure. Default is 10.
+         of failure. Default is 5.
         :param pre_fix: A prefix to be added to the `index_ric` before making
          the request. Default is "0#.".
         :return: A tuple containing:
@@ -285,7 +285,7 @@ class EikonDownloader:
             target_date: Union[str, datetime],
             fields: Union[str, List[str]],
             parameters: Optional[dict] = None,
-            max_retries: int = 10,
+            max_retries: int = 5,
             pre_fix: Optional[str] = None,
     ) -> Union[Tuple[None, str], Tuple[pd.DataFrame, None]]:
         """
@@ -305,7 +305,7 @@ class EikonDownloader:
         :param parameters: Optional dictionary of additional parameters for
          the request (default is None).
         :param max_retries: The maximum number of retries to attempt in case
-         of failure. Default is 10.
+         of failure. Default is 5.
         :param pre_fix: Optional prefix to be added to the `etp_ric` before
          making the request. Default is None.
         :return: A tuple containing:
@@ -349,7 +349,7 @@ class EikonDownloader:
             num_years: Optional[int],
             start_date: Optional[Union[str, datetime]],
             pre_fix: Union[str, None] = ".",
-            max_retries: int = 10,
+            max_retries: int = 5,
             fields: Union[str, List[str]] = 'CLOSE',
             interval: str = "daily",
             corax: str = 'adjusted',
@@ -377,7 +377,7 @@ class EikonDownloader:
         :param pre_fix: Optional prefix to be added to the `index_ric` before
          making the request. Default is '.'.
         :param max_retries: The maximum number of retries in case of failure.
-         Default is 10.
+         Default is 5.
         :param interval: The data interval to retrieve. Possible values:
          'tick', 'minute', 'hour', 'daily', 'weekly', 'monthly', 'quarterly',
           'yearly'.
@@ -444,7 +444,7 @@ class EikonDownloader:
             index_df: Optional[pd.DataFrame] = None,
             num_years: Optional[int] = None,
             start_date: Optional[Union[str, datetime]] = None,
-            max_retries: int = 10,
+            max_retries: int = 5,
             fields: Union[str, List[str]] = 'CLOSE',
             interval: str = "daily",
             corax: str = 'adjusted',
@@ -472,7 +472,7 @@ class EikonDownloader:
         :param start_date: The reference start date (format: 'YYYY-MM-DD') or
          a datetime object. Optional.
         :param max_retries: The maximum number of retries to attempt in case
-         of failure. Default is 10.
+         of failure. Default is 5.
         :param interval: The data interval to retrieve. Possible values:
          'tick', 'minute', 'hour', 'daily', 'weekly', 'monthly', 'quarterly',
           'yearly'. Default is 'daily'.
@@ -623,7 +623,7 @@ class EikonDownloader:
             target_date: Union[str, datetime],
             pre_fix: Optional[str] = None,
             parameters: Optional[dict] = None,
-            max_retries: int = 10
+            max_retries: int = 5
     ) -> Union[pd.DataFrame, Tuple[pd.DataFrame, str]]:
         """
         Downloads additional stock data for a given list of RICs and fields,
@@ -641,7 +641,7 @@ class EikonDownloader:
         :param pre_fix: An optional prefix to be added to the RIC(s).
         :param parameters: Optional global parameters to include in the request.
         :param max_retries: The maximum number of retries in case of failure
-         (default is 10).
+         (default is 5).
 
         :return: A tuple with a DataFrame containing the downloaded data
          (or an empty DataFrame) and an error message (if any). If no data is
