@@ -582,8 +582,11 @@ class EikonDownloader:
                     f" from {start_date} to {end_date}, adding NaNs."
                 )
                 ric_timeseries_df = pd.DataFrame(
-                    index=pd.date_range(start=start_date, end=end_date,
-                                        freq='D'),
+                    index=index_df.index if index_df is not None
+                    else pd.date_range(
+                        start=start_date, end=end_date,
+                        freq='D'
+                    ),
                     columns=[ric],
                     data=np.nan
                 )
