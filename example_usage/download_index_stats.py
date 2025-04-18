@@ -40,9 +40,9 @@ name_mapping_dict = {
 # Initialize downloader
 downloader = EikonDownloader(
     api_key=api_key,
-    request_delay=1,
+    request_delay=2,
     request_limit_delay=3600,
-    error_delay=5
+    error_delay=10
 )
 
 # Generate target dates
@@ -95,7 +95,7 @@ for index_name in indices_list:
             fields=additional_index_data_fields,
             pre_fix=".",
             target_date=target_date,
-            max_retries=10
+            max_retries=5
         )
 
         if err is not None:

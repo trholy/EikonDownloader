@@ -61,9 +61,9 @@ for index_name in indices_list:
     # Initialize downloader
     downloader = EikonDownloader(
         api_key=api_key,
-        request_delay=1,
+        request_delay=2,
         request_limit_delay=3600,
-        error_delay=5
+        error_delay=10
     )
 
     # Create directory if not existing
@@ -77,7 +77,7 @@ for index_name in indices_list:
         end_date=end_date,
         num_years=None,
         start_date=start_date,
-        max_retries=10,
+        max_retries=5,
         fields='CLOSE',
         interval="daily",
         corax='adjusted',
@@ -98,7 +98,7 @@ for index_name in indices_list:
                 end_date=end_date,
                 num_years=None,
                 start_date=start_date,
-                max_retries=10,
+                max_retries=5,
                 fields='CLOSE',
                 interval="daily",
                 corax='adjusted',

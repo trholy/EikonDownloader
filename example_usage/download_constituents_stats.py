@@ -53,7 +53,7 @@ data_fields = [
 # Initialize downloader
 downloader = EikonDownloader(
     api_key=api_key,
-    request_delay=1,
+    request_delay=2,
     request_limit_delay=3600,
     error_delay=5
 )
@@ -106,7 +106,7 @@ for index_name in indices_list:
                 rics=rics,
                 fields=data_fields,
                 target_date=target_date,
-                max_retries=10
+                max_retries=5
             )
             if additional_stock_data_df_ is not None:
                 additional_stock_data_df_list.append(additional_stock_data_df_)
