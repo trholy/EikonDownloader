@@ -27,11 +27,11 @@ indices_list = [
 ]
 
 # RIC replacement dict for not available sources
-name_mapping = True
+name_mapping = False
 name_mapping_dict = {
     'SP500': 'SPX',
     'SP400': 'IDX',
-    # 'N225': 'N225E',
+    #  'N225': 'N225E',
     'SP600': 'SPCY',
     'SP1000': 'SPMIDSM',
     'SPCOMP': 'SPSUP'
@@ -67,7 +67,6 @@ for index_name in indices_list:
         index_name = name_mapping_dict.get(index_name, index_name)
 
     for target_date in target_dates:
-
         logger.info(f"\nActual target date for {index_name}: {target_date}")
 
         # Download index chain at target date

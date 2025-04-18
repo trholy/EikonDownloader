@@ -30,10 +30,12 @@ indices_list = [
 # RIC replacement dict for not available sources
 name_mapping = False
 name_mapping_dict = {
-    'IDX': 'SP400',
-    'SPCY': 'SP600',
-    'SPMIDSM': 'SP1000',
-    'SPSUP': 'SPCOMP'
+    'SP500': 'SPX',
+    'SP400': 'IDX',
+    #  'N225': 'N225E',
+    'SP600': 'SPCY',
+    'SP1000': 'SPMIDSM',
+    'SPCOMP': 'SPSUP'
 }
 
 # Data fields to download
@@ -55,7 +57,7 @@ downloader = EikonDownloader(
     api_key=api_key,
     request_delay=2,
     request_limit_delay=3600,
-    error_delay=5
+    error_delay=10
 )
 
 # Generate target dates
