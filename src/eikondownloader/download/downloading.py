@@ -25,10 +25,10 @@ class EikonDownloader:
     def __init__(
             self,
             api_key: str,
-            request_delay: Optional[Union[int, float]] = 1,
+            request_delay: Optional[Union[int, float]] = 2,
             request_limit_delay: Optional[Union[int, float]] = 3600,
             proxy_error_delay: Optional[Union[int, float]] = 3600,
-            error_delay: Optional[Union[int, float]] = 5,
+            error_delay: Optional[Union[int, float]] = 10,
     ):
         """
         Initializes the object with necessary configuration settings and sets
