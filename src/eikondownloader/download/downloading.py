@@ -24,7 +24,7 @@ logging.basicConfig(
 class EikonDownloader:
     def __init__(
             self,
-            api_key: str,
+            api_key: Optional[str] = None,
             request_delay: Optional[Union[int, float]] = 2,
             request_limit_delay: Optional[Union[int, float]] = 3600,
             proxy_error_delay: Optional[Union[int, float]] = 3600,
@@ -54,7 +54,8 @@ class EikonDownloader:
         self.proxy_error_delay = proxy_error_delay
         self.error_delay = error_delay
 
-        ek.set_app_key(api_key)
+        if api_key:
+            ek.set_app_key(api_key)
 
         self.logger = logging.getLogger(__name__)
 
