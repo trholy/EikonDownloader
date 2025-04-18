@@ -148,23 +148,28 @@ class OSUploader:
                     if future.result():
                         self.uploaded_files.append(local_file_path)
                         self.logger.info(
-                            f"Successfully uploaded: {local_file_path}")
+                            f"Successfully uploaded: {local_file_path}"
+                        )
                     else:
                         self.corrupted_files.append(local_file_path)
                         self.logger.warning(
                             f"Hash mismatch for {local_file_path}."
-                            f" Upload might be corrupted!")
+                            f" Upload might be corrupted!"
+                        )
 
                 except Exception as e:
                     self.logger.error(
-                        f"Unexpected error uploading {local_file_path}: {e}")
+                        f"Unexpected error uploading {local_file_path}: {e}"
+                    )
 
         # Final summary logs
         self.logger.info(
-            f"Uploaded {len(self.uploaded_files)} files successfully.")
+            f"Uploaded {len(self.uploaded_files)} files successfully."
+        )
         if self.corrupted_files:
             self.logger.warning(
-                f"{len(self.corrupted_files)} files may be corrupted.")
+                f"{len(self.corrupted_files)} files may be corrupted."
+            )
 
         # Log uploads if enabled
         if self.log_uploads:
@@ -222,7 +227,8 @@ class OSUploader:
             if check_for_existence and remote_path in existing_files:
                 if existing_files[remote_path] == local_md5:
                     self.logger.info(
-                        f"Skipping already uploaded file: {remote_path}")
+                        f"Skipping already uploaded file: {remote_path}"
+                    )
                     return True  # Skip upload
 
             # Step 2: Upload the file
@@ -236,10 +242,12 @@ class OSUploader:
 
         except S3Error as e:
             self.logger.error(
-                f"Failed to upload {local_file_path} due to S3 error: {e}")
+                f"Failed to upload {local_file_path} due to S3 error: {e}"
+            )
         except Exception as e:
             self.logger.error(
-                f"Unexpected error uploading {local_file_path}: {e}")
+                f"Unexpected error uploading {local_file_path}: {e}"
+            )
 
         return False
 

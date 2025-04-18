@@ -1020,7 +1020,8 @@ class OSDownloader:
             if os.path.exists(local_file_path) and self._verify_file_integrity(
                     bucket_name, local_file_path, remote_path):
                 self.logger.info(
-                    f"Skipping already downloaded file: {remote_path}")
+                    f"Skipping already downloaded file: {remote_path}"
+                )
                 continue
 
             files_to_download.append((local_file_path, remote_path))
@@ -1090,8 +1091,9 @@ class OSDownloader:
             self.client.fget_object(bucket_name, remote_path, local_file_path)
 
             # Verify integrity after download
-            return self._verify_file_integrity(bucket_name, local_file_path,
-                                               remote_path)
+            return self._verify_file_integrity(
+                bucket_name, local_file_path, remote_path
+            )
 
         except S3Error as e:
             self.logger.error(
