@@ -6,7 +6,7 @@ from minio.error import S3Error
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional, Tuple, Union
-from datetime import datetime
+from datetime import datetime, timedelta
 import hashlib
 import logging
 import time
@@ -155,6 +155,7 @@ class EikonDownloader:
                 start_date = pd.Timestamp(start_date).to_pydatetime()
         elif num_years is not None:
             start_date = end_date.replace(year=end_date.year - num_years)
+            start_date = start_date + timedelta(days=1)
         else:
             raise ValueError(
                 "Either 'num_years' or 'start_date' must be provided.")
@@ -168,6 +169,12 @@ class EikonDownloader:
         while current_date >= start_date:
             end_dates.append(current_date.strftime("%Y-%m-%d"))
             start_of_decade = datetime(current_date.year - 9, 1, 1)
+
+            if start_of_decade < start_date:
+                start_of_decade = start_date
+            if current_date == start_of_decade:
+                break
+
             start_dates.append(start_of_decade.strftime("%Y-%m-%d"))
             current_date = start_of_decade.replace(year=current_date.year - 10)
 
