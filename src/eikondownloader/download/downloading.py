@@ -493,41 +493,34 @@ class EikonDownloader:
             corax: str = 'adjusted',
             calendar: Optional[str] = None,
             count: Optional[int] = None
-    ) -> pd.DataFrame:
+    ) -> Tuple[pd.DataFrame, Optional[str]]:
         """
-        Download stock price data for a given symbol within a specified date
-         range and merge multiple requests. This method retrieves stock price
-         data for the given RIC (Reuters Instrument Code) over a series of
-         decades, handling retries and error logging. It returns a DataFrame
-         with the stock price data for the specified fields, interval, and
-         other parameters. If no data is retrieved, NaN values are appended for
-         the corresponding date range.
+        Retrieves the timeseries data for a given stock RIC within
+         a specified date range.
 
-        :param ric: The stock RIC to download data for. Must be a string.
-        :param fields: The fields to retrieve for the stock. Can be a single
-         field as a string or a list of fields.
-        :param end_date: The reference end date (format: 'YYYY-MM-DD') or a
-         datetime object.
-        :param index_df: An optional DataFrame to append the retrieved stock
-         data to (default is None).
-        :param num_years: The number of years to generate past target dates.
-         Optional.
-        :param start_date: The reference start date (format: 'YYYY-MM-DD') or
-         a datetime object. Optional.
-        :param max_retries: The maximum number of retries to attempt in case
-         of failure. Default is 5.
-        :param interval: The data interval to retrieve. Possible values:
-         'tick', 'minute', 'hour', 'daily', 'weekly', 'monthly', 'quarterly',
-          'yearly'. Default is 'daily'.
-        :param corax: The type of data adjustment. Possible values: 'adjusted',
-         'unadjusted'. Default is 'adjusted'.
-        :param calendar: The calendar type to use. Possible values: 'native',
-         'tradingdays', 'calendardays'. Optional.
-        :param count: The maximum number of data points to retrieve. Optional.
-
-        :return: A pandas DataFrame with the retrieved stock data merged with
-         the provided `index_df`, or a new DataFrame if `index_df` is None.
-        :raises TypeError: If `fields` is not a string or a list of strings.
+        param: ric; The RIC (Reuters Instrument Code) of the stock; str
+        param: end_date; The end date for the timeseries data;
+         Union[str, datetime]
+        param: index_df; An optional DataFrame to join the retrieved data with;
+         Optional[pd.DataFrame]; default: None
+        param: num_years; The number of years of data to retrieve;
+         Optional[int]; default: None
+        param: start_date; The start date for the timeseries data;
+         Optional[Union[str, datetime]]; default: None
+        param: max_retries; Maximum number of retries in case of failure;
+         int; default: 5
+        param: fields; The fields to retrieve; Union[str, List[str]];
+         default: 'CLOSE'
+        param: interval; The interval of the timeseries data
+         (e.g., 'daily', 'weekly'); str; default: "daily"
+        param: corax; The type of price adjustment ('adjusted', 'unadjusted');
+         str; default: 'adjusted'
+        param: calendar; The calendar to use for the timeseries data;
+         Optional[str]; default: None
+        param: count; The number of data points to retrieve; Optional[int];
+         default: None
+        :return: A tuple containing the timeseries data as a pandas DataFrame
+         and an error message; Tuple[pd.DataFrame, Optional[str]]
         """
         if isinstance(fields, str):
             fields = [fields]
@@ -542,10 +535,11 @@ class EikonDownloader:
         ric_timeseries_df_list = []  # List to store dataframes
 
         for start_date, end_date in zip(start_dates, end_dates):
-            retries = 0
+
+            retry_count = 0
             data_retrieved = False
 
-            while retries < max_retries:
+            while retry_count < max_retries:
                 try:
                     self._apply_request_delay()
                     self.logger.info(
@@ -566,57 +560,80 @@ class EikonDownloader:
                         debug=False
                     )
 
-                    if (ric_timeseries_df is not None
-                            and not ric_timeseries_df.empty):
-                        ric_timeseries_df.sort_index(ascending=False,
-                                                     inplace=True)
-                        """
-                        ric_timeseries_df.rename(columns={'CLOSE': ric},
-                                                 inplace=True)
-                        """
-                        ric_timeseries_df.columns = [ric]
-                        data_retrieved = True
-                        ric_timeseries_df_list.append(ric_timeseries_df)
-                        break  # Break out of retry loop if successful
-
+                    if isinstance(ric_timeseries_df, pd.DataFrame):
+                        if not ric_timeseries_df.empty:
+                            ric_timeseries_df.sort_index(
+                                ascending=False, inplace=True
+                            )
+                            ric_timeseries_df.columns = [ric]
+                            ric_timeseries_df_list.append(ric_timeseries_df)
+                            data_retrieved = True
+                            self.logger.info(
+                                f"Data retrieved for {ric}"
+                                f" from {start_date} to {end_date}."
+                            )
+                            break
+                        else:
+                            self.logger.warning(
+                                f"No data retrieved for {ric}"
+                                f" from {start_date} to {end_date}."
+                            )
                     else:
-                        data_retrieved = False
+                        self.logger.warning(
+                            f"Unexpected data type for {ric}"
+                            f" from {start_date} to {end_date}."
+                        )
+                    retry_count += 1
 
                 except ek.EikonError as err:
-                    self.logger.error(
-                        f"Error downloading {ric} from"
-                        f" {start_date} to {end_date}: {err.code}"
-                    )
-
-                    if err.code == -1:  # Critical error, cannot recover
+                    if err.code == -1:
                         self.logger.warning(
-                            f"Skipping {ric} due to critical error {err.code}.")
-                        break
-
-                    elif err.code == 429:  # Rate limit exceeded
-                        self.logger.warning(
-                            f"Rate limit hit. Sleeping for"
-                            f" {self.request_limit_delay} minutes."
+                            f"Skipping download of {ric} with fields: {fields}"
+                            f" from {start_date} to {end_date}"
+                            f" due to error {err.code}."
                         )
-                        self._apply_request_limit_delay()
-
+                        break
                     elif err.code == 401:
                         self.logger.warning(
                             f"Eikon Proxy not running or cannot be reached."
-                            f" Sleeping for {self.proxy_error_delay} minutes."
+                            f" Sleeping for {self.proxy_error_delay} hours."
                         )
                         self._apply_proxy_error_delay()
-
+                        retry_count += 1
+                    elif err.code == 429:
+                        self.logger.warning(
+                            f"Request limit reached. Sleeping for"
+                            f" {self.request_limit_delay} hours.")
+                        self._apply_request_limit_delay()
+                        retry_count += 1
+                    elif err.code == 500:
+                        self.logger.warning(
+                            f"Network Error. Sleeping for"
+                            f" {self.network_error_delay} hours.")
+                        self._apply_network_error_delay()
+                        retry_count += 1
+                    elif err.code == 2504:
+                        self.logger.warning(
+                            f"Gateway Time-out. Sleeping for"
+                            f" {self.network_error_delay} minutes.")
+                        self._apply_gateway_delay()
+                        retry_count += 1
                     else:
-                        self.logger.info(
-                            f"Retrying download ({retries + 1}/{max_retries})."
+                        self.logger.warning(
+                            f"Unhandled Eikon error code: {err.code}"
+                            f" Sleeping for {self.general_error_delay} minutes."
                         )
-                        self._apply_request_delay()
-                        retries += 1
-
+                        self._apply_general_error_delay()
+                        retry_count += 1
                 except Exception as e:
-                    self.logger.error(f"Unexpected error for {ric}: {str(e)}")
-                    return index_df
+                    self.logger.error(
+                        f"Unexpected error for {ric}"
+                        f" with fields: {fields}"
+                        f" from {start_date} to {end_date}: {str(e)}"
+                        f" Sleeping for {self.general_error_delay} minutes."
+                    )
+                    self._apply_general_error_delay()
+                    retry_count += 1
 
             # If no data was retrieved, append a NaN DataFrame
             if not data_retrieved:
@@ -625,11 +642,9 @@ class EikonDownloader:
                     f" from {start_date} to {end_date}, adding NaNs."
                 )
                 ric_timeseries_df = pd.DataFrame(
-                    index=index_df.index if index_df is not None
-                    else pd.date_range(
-                        start=start_date, end=end_date,
-                        freq='D'
-                    ),
+                    index=index_df.index
+                    if isinstance(index_df, pd.DataFrame) #and len(index_df.index) > 2
+                    else pd.date_range(start=start_date, end=end_date, freq='D'),
                     columns=[ric],
                     data=np.nan
                 )
@@ -644,13 +659,8 @@ class EikonDownloader:
                 ~merged_ric_timeseries_df.index.duplicated(keep='first')
             ]
 
-            # Prevent duplicate column names by adding prefix
-            """
-            merged_ric_timeseries_df = merged_ric_timeseries_df.add_prefix(
-                f"{ric}_")
-            """
             # Join merged data with index_df
-            if index_df is not None:
+            if isinstance(index_df, pd.DataFrame):
                 index_df = index_df.join(merged_ric_timeseries_df, how='outer')
             else:
                 index_df = merged_ric_timeseries_df.copy(deep=True)
@@ -660,7 +670,7 @@ class EikonDownloader:
             f" from {start_dates[-1]} to {end_dates[0]}."
         )
 
-        return index_df
+        return index_df, None
 
     def get_constituents_data(
             self,
