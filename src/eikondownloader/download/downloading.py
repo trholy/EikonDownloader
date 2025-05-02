@@ -33,28 +33,27 @@ class EikonDownloader:
             network_error_delay: Optional[Union[int, float]] = 1
     ):
         """
-        Initializes the object with necessary configuration settings and sets
-         up the Eikon API key. This constructor sets the default delays
-         for request, request limit, and error handling. It also configures
-         the Eikon API by setting the provided `api_key`. Additionally,
-         a logger is initialized for tracking the operations.
+        Initializes the EikonDownloader class with optional parameters for API
+         key and various delay settings.
 
-        :param api_key: The Eikon API key to authenticate requests.
-        :param request_delay: The delay (in seconds) between each request
-         to avoid overwhelming the server. Default is 1 second.
-        :param request_limit_delay: The delay (in seconds) when the request
-         limit is reached. Default is 3600 seconds (1 hour).
-        :param proxy_error_delay: The delay (in seconds) when the proxy can't
-         be reached. Default is 3600 seconds (1 hour).
-        :param error_delay: The delay (in seconds) to wait after encountering
-         an error. Default is 5 seconds.
-
-        :return: None
+        param: api_key; Optional[str]; An optional Eikon API key to
+         authenticate requests. Defaults to None.
+        param: request_delay; Optional[Union[int, float]]; The delay in
+         seconds between requests to avoid hitting rate limits. Defaults to 3.
+        param: general_error_delay; Optional[Union[int, float]]; The delay in
+         minutes to wait when a general error occurs. Defaults to 5.
+        param: gateway_delay; Optional[Union[int, float]]; The delay in
+         minutes to wait when a Gateway Time-out. Defaults to 5.
+        param: request_limit_delay; Optional[Union[int, float]]; The delay in
+         hours to wait when a request limit is reached. Defaults to 6.
+        param: proxy_error_delay; Optional[Union[int, float]]; The delay in
+         hours to wait when a proxy error occurs. Defaults to 6.
+        param: network_error_delay; Optional[Union[int, float]]; The delay in
+         hours to wait when a general error occurs. Defaults to 1.
         """
         self.request_delay = request_delay
         self.request_limit_delay = request_limit_delay
         self.proxy_error_delay = proxy_error_delay
-        self.error_delay = error_delay
         self.general_error_delay = general_error_delay
         self.network_error_delay = network_error_delay
         self.gateway_delay = gateway_delay
