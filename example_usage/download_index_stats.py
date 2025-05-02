@@ -39,10 +39,7 @@ name_mapping_dict = {
 
 # Initialize downloader
 downloader = EikonDownloader(
-    api_key=api_key,
-    request_delay=2,
-    request_limit_delay=3600,
-    error_delay=10
+    api_key=api_key
 )
 
 # Generate target dates
