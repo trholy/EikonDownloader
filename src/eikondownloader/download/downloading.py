@@ -662,7 +662,7 @@ class EikonDownloader:
 
         return index_df
 
-    def get_additional_data(
+    def get_constituents_data(
             self,
             rics: Union[str, List[str]],
             fields: Union[str, List[str]],
@@ -670,31 +670,24 @@ class EikonDownloader:
             pre_fix: Optional[str] = None,
             parameters: Optional[dict] = None,
             max_retries: int = 5
-    ) -> Union[pd.DataFrame, Tuple[pd.DataFrame, str]]:
+    ) -> Tuple[pd.DataFrame, Optional[str]]:
         """
-        Downloads additional stock data for a given list of RICs and fields,
-         with support for retries and error handling. This method retrieves
-         extra data (such as ESG scores, market cap, etc.) for one or more
-         RICs (Reuters Instrument Codes) based on the specified fields.
-         It supports retries in case of errors and logs the process.
+        Retrieves the constituents data for given RICs
+         on a specified target date.
 
-        :param rics: The RIC(s) (string or list of strings) for which additional
-         stock data is to be retrieved.
-        :param fields: The fields (string or list of strings) to retrieve for
-         the given RIC(s).
-        :param target_date: The target date for the data in 'YYYY-MM-DD' format
-         or as a datetime object.
-        :param pre_fix: An optional prefix to be added to the RIC(s).
-        :param parameters: Optional global parameters to include in the request.
-        :param max_retries: The maximum number of retries in case of failure
-         (default is 5).
-
-        :return: A tuple with a DataFrame containing the downloaded data
-         (or an empty DataFrame) and an error message (if any). If no data is
-         available after retries, it returns an empty DataFrame with a
-         corresponding error message.
-        :raises: Returns a tuple of (empty DataFrame, error message) in case
-         of failure after maximum retries.
+        param: rics; The RICs (Reuters Instrument Codes) for which to
+         retrieve data; Union[str, List[str]]
+        param: fields; The fields to retrieve; Union[str, List[str]]
+        param: target_date; The date for which to retrieve the data;
+         Union[str, datetime]
+        param: pre_fix; Prefix to be added to each RIC; Optional[str];
+         default: None
+        param: parameters; Additional parameters to pass to the
+         data retrieval function; Optional[dict]; default: None
+        param: max_retries; Maximum number of retries in case of failure;
+         int; default: 5
+        :return: A tuple containing the constituents data as a pandas DataFrame
+         and an error message; Tuple[pd.DataFrame, Optional[str]]
         """
         if isinstance(pre_fix, str) and isinstance(rics, str):
             rics = pre_fix + rics
@@ -705,14 +698,20 @@ class EikonDownloader:
         if isinstance(fields, str):
             fields = [fields]
 
+        if isinstance(target_date, datetime):
+            target_date = target_date.strftime('%Y-%m-%d')
+
+        if isinstance(pre_fix, str):
+            rics = [pre_fix + ric for ric in rics]
+
         retry_count = 0
 
         while retry_count < max_retries:
             try:
                 self._apply_request_delay()
                 self.logger.info(
-                    f"Downloading additional stock data"
-                    f" for {rics} with fields: {fields}."
+                    f"Downloading additional data for {rics}"
+                    f" with fields: {fields} at {target_date}."
                 )
 
                 meta_data_df, err = ek.get_data(
@@ -726,92 +725,78 @@ class EikonDownloader:
                     raw_output=False,
                     field_name=False
                 )
-                """
-                # Replace <NA> with np.nan
-                meta_data_df = meta_data_df.replace({pd.NA: np.nan})
 
-                cols_to_convert_to_float = [
-                    'ESG Score',
-                    'Environmental Pillar Score',
-                    'Social Pillar Score',
-                    'Governance Pillar Score',
-                    'Company Market Cap'
-                ]
-                cols_to_convert_to_string = [
-                    'Instrument',
-                    'TRBC Economic Sector Name',
-                    'TRBC Business Sector Name',
-                    'TRBC Industry Group Name',
-                    'TRBC Industry Name',
-                    'ISIN'
-                ]
-                meta_data_df[cols_to_convert_to_float] = meta_data_df[cols_to_convert_to_float].astype(float)
-                meta_data_df[cols_to_convert_to_string] = meta_data_df[cols_to_convert_to_string].astype('string')
-                """
-
-                if err:
-                    self.logger.error(
-                        f"Error downloading additional stock data: {err}")
-                    return self._empty_df_data(rics, fields), f"Error: {err}"
-
-                if (meta_data_df is not None
+                if (isinstance(meta_data_df, pd.DataFrame)
                         and not meta_data_df.empty
-                        and meta_data_df.shape[0] > 1):
+                        and meta_data_df.shape[0] > int(len(rics) * 0.1)):
                     self.logger.info(
-                        "Successfully downloaded additional stock data.")
+                        f"Successfully downloaded {rics} with fields: {fields}"
+                        f"at {target_date}."
+                    )
                     return meta_data_df, None
-
-                else:
-                    self.logger.warning(
-                        f"No additional stock data available for {rics}.")
+                elif err:
+                    self.logger.error(
+                        f"Error downloading of {rics} with fields: {fields}"
+                        f" at {target_date}: {err}. Retrying..."
+                    )
                     retry_count += 1
-                    continue
+                else:
+                    self.logger.error(
+                        f"No data received for {rics} with fields: {fields}"
+                        f"at {target_date}. Retrying...")
+                    retry_count += 1
 
             except ek.EikonError as err:
-                self.logger.error(
-                    f"Downloading additional stock data failed!"
-                    f" Error code: {err.code}"
-                )
-
                 if err.code == -1:
                     self.logger.warning(
-                        f"Skipping download of {rics} due to error {err.code}.")
-                    return self._empty_df_data(rics,
-                                               fields), f"Error: {err.code}"
-
+                        f"Skipping download of {rics} with fields: {fields}"
+                        f" at {target_date} due to error {err.code}."
+                    )
+                    return self._empty_df_data(rics, fields), f"Error: {err.code}"
                 elif err.code == 401:
                     self.logger.warning(
                         f"Eikon Proxy not running or cannot be reached."
-                        f" Sleeping for {self.proxy_error_delay} minutes."
+                        f" Sleeping for {self.proxy_error_delay} hours."
                     )
                     self._apply_proxy_error_delay()
-
+                    retry_count += 1
                 elif err.code == 429:
                     self.logger.warning(
-                        f"Rate limit hit. Sleeping"
-                        f" for {self.request_limit_delay} minutes."
-                    )
+                        f"Request limit reached. Sleeping for"
+                        f" {self.request_limit_delay} hours.")
                     self._apply_request_limit_delay()
-
+                    retry_count += 1
+                elif err.code == 500:
+                    self.logger.warning(
+                        f"Network Error. Sleeping for"
+                        f" {self.network_error_delay} hours.")
+                    self._apply_network_error_delay()
+                    retry_count += 1
+                elif err.code == 2504:
+                    self.logger.warning(
+                        f"Gateway Time-out. Sleeping for"
+                        f" {self.network_error_delay} minutes.")
+                    self._apply_gateway_delay()
+                    retry_count += 1
                 else:
-                    self.logger.info(
-                        f"Retrying download ({retry_count + 1}/{max_retries})."
+                    self.logger.warning(
+                        f"Unhandled Eikon error code: {err.code}"
+                        f" Sleeping for {self.general_error_delay} minutes."
                     )
-                    self._apply_request_delay()
-
-                retry_count += 1
-
+                    self._apply_general_error_delay()
+                    retry_count += 1
             except Exception as e:
                 self.logger.error(
-                    f"Unexpected error while downloading additional"
-                    f" stock data: {str(e)}"
+                    f"Unexpected error for {rics}"
+                    f" with fields: {fields} at {target_date}: {str(e)}"
+                    f" Sleeping for {self.general_error_delay} minutes."
                 )
-                return (self._empty_df_data(rics, fields),
-                        f"Unexpected error: {str(e)}")
+                self._apply_general_error_delay()
+                retry_count += 1
 
-        self.logger.error(
-            f"Failed to download additional stock data"
-            f" for {rics} after {max_retries} attempts."
+        self.logger.critical(
+            f"Data retrieval  for {rics} with fields: {fields} at {target_date}"
+            f" failed after {max_retries} retries."
         )
         return self._empty_df_data(rics, fields), "Max retries exceeded."
 
