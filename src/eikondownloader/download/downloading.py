@@ -216,43 +216,38 @@ class EikonDownloader:
             pre_fix: Optional[str] = "0#."
     ) -> Tuple[pd.DataFrame, Optional[str]]:
         """
-        Retrieve the index chain for a given index RIC and target date.
+        Retrieves the index chain data for a specified index RIC at a given
+         target date.
 
-        This method downloads the index chain data for a specified index RIC
-         at a given target date, with optional retries and error handling.
-         The index RIC is prefixed with a default or provided string, and the
-         method can request one or more fields. If the download fails after
-         the specified number of retries, an empty DataFrame is returned
-         along with an error message.
-
-        :param index_ric: The Reuters Instrument Code (RIC) for the index.
-         Must be a string.
-        :param target_date: The target date for the index data. Can be a string
-         (e.g. '2025-12-31') or a datetime object.
-        :param fields: The fields to retrieve for the index. Can be a single
-         field as a string or a list of fields.
-        :param parameters: Optional dictionary of additional parameters for
-         the request (default is None).
-        :param max_retries: The maximum number of retries to attempt in case
-         of failure. Default is 5.
-        :param pre_fix: A prefix to be added to the `index_ric` before making
-         the request. Default is "0#.".
-        :return: A tuple containing:
-         - A pandas DataFrame with the requested index chain data.
-         - An optional error message if an error occurs, otherwise None.
-        :raises TypeError: If `index_ric` is not a string.
+        param: index_ric; str; The RIC (Reuters Instrument Code) of the index.
+        param: target_date; Union[str, datetime]; The target date for which
+         to retrieve the index chain data. Can be a string in 'YYYY-MM-DD'
+         format or a datetime object.
+        param: fields; Union[str, List[str]]; The fields to retrieve.
+         Can be a single field as a string or a list of fields.
+        param: parameters; Optional[dict]; Additional parameters to pass
+         to the Eikon API. Defaults to None.
+        param: max_retries; int; The maximum number of retries to attempt
+         if the request fails. Defaults to 5.
+        param: pre_fix; Optional[str]; A prefix to prepend to the index RIC.
+         Defaults to "0#.".
+        :return: Tuple[pd.DataFrame, Optional[str]]; A tuple containing
+         a DataFrame with the index chain data and an optional error message.
+          If the data retrieval is successful, the error message will be None.
         """
         if not isinstance(index_ric, str):
             raise TypeError("'index_ric' must be of type 'str'!")
 
-        if pre_fix:
+        if isinstance(pre_fix, str):
             index_ric = pre_fix + index_ric
 
         if isinstance(fields, str):
             fields = [fields]
 
-        retry_count = 0
+        if isinstance(target_date, datetime):
+            target_date = target_date.strftime('%Y-%m-%d')
 
+        retry_count = 0
         while retry_count < max_retries:
             try:
                 self._apply_request_delay()
@@ -267,50 +262,70 @@ class EikonDownloader:
                     field_name=False
                 )
 
-                if index_chain_df is not None and not index_chain_df.empty:
+                if (isinstance(index_chain_df, pd.DataFrame)
+                        and not index_chain_df.empty):
                     self.logger.info(
                         f"Successfully downloaded {index_ric} at {target_date}."
                     )
                     return index_chain_df, None
-
-                self.logger.warning(
-                    f"No data returned for {index_ric} at {target_date}.")
-                retry_count += 1
+                else:
+                    self.logger.warning(
+                        f"No data returned for {index_ric} at {target_date}."
+                        f" Sleeping for {self.general_error_delay} minutes."
+                    )
+                    self._apply_general_error_delay()
+                    retry_count += 1
 
             except ek.EikonError as err:
-                self.logger.error(
-                    f"Error downloading {index_ric} at {target_date}."
-                    f" Error code: {err.code}")
-
                 if err.code == -1:
                     self.logger.warning(
                         f"Skipping download of {index_ric} at {target_date}."
                     )
                     return self._empty_df_chain(index_ric), f"Error: {err.code}"
-
                 elif err.code == 401:
                     self.logger.warning(
                         f"Eikon Proxy not running or cannot be reached."
-                        f" Sleeping for {self.proxy_error_delay} minutes."
+                        f" Sleeping for {self.proxy_error_delay} hours."
                     )
                     self._apply_proxy_error_delay()
-
+                    retry_count += 1
                 elif err.code == 429:
                     self.logger.warning(
                         f"Request limit reached. Sleeping for"
-                        f" {self.request_limit_delay} seconds.")
+                        f" {self.request_limit_delay} hours.")
                     self._apply_request_limit_delay()
-
+                    retry_count += 1
+                elif err.code == 500:
+                    self.logger.warning(
+                        f"Network Error. Sleeping for"
+                        f" {self.network_error_delay} hours.")
+                    self._apply_network_error_delay()
+                    retry_count += 1
+                elif err.code == 2504:
+                    self.logger.warning(
+                        f"Gateway Time-out. Sleeping for"
+                        f" {self.network_error_delay} minutes.")
+                    self._apply_gateway_delay()
+                    retry_count += 1
+                else:
+                    self.logger.warning(
+                        f"Unhandled Eikon error code: {err.code}"
+                        f" Sleeping for {self.general_error_delay} minutes."
+                    )
+                    self._apply_general_error_delay()
+                    retry_count += 1
+            except Exception as e:
+                self.logger.error(
+                    f"Unexpected error for {index_ric}: {str(e)}"
+                    f" Sleeping for {self.general_error_delay} minutes."
+                )
+                self._apply_general_error_delay()
                 retry_count += 1
 
-            except Exception as e:
-                self.logger.error(f"Unexpected error for {index_ric}: {str(e)}")
-                return self._empty_df_chain(
-                    index_ric), f"Unexpected error: {str(e)}"
-
-        self.logger.error(
-            f"Failed to download {index_ric} "
-            f"at {target_date} after {max_retries} attempts.")
+        self.logger.critical(
+            f"Data retrieval for {index_ric} at {target_date}"
+            f" failed after {max_retries} retries."
+        )
         return self._empty_df_chain(index_ric), "Max retries exceeded."
 
     def get_etp_chain(
@@ -835,6 +850,7 @@ class EikonDownloader:
             logging.error(f"An unexpected error occurred: {e}")
             raise
 
+    @staticmethod
     def _empty_df_data(
             self,
             rics: List[str],
