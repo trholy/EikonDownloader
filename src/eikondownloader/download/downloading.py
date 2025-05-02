@@ -800,6 +800,73 @@ class EikonDownloader:
         )
         return self._empty_df_data(rics, fields), "Max retries exceeded."
 
+    def get_index_data(
+            self,
+            ric: str,
+            fields: Union[str, List[str]],
+            target_date: Union[str, datetime],
+            pre_fix: Optional[str] = None,
+            parameters: Optional[dict] = None,
+            max_retries: int = 5,
+            nan_ratio: float = 0.25
+    ) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+        """
+        Retrieves the index data for a given RIC on a specified target date.
+
+        param: ric; The RIC (Reuters Instrument Code) of the index; str
+        param: fields; The fields to retrieve; Union[str, List[str]]
+        param: target_date; The date for which to retrieve the data;
+         Union[str, datetime]
+        param: pre_fix; Prefix to be added to the RIC; Optional[str];
+         default: None
+        param: parameters; Additional parameters to pass to the data retrieval
+         function; Optional[dict]; default: None
+        param: max_retries; Maximum number of retries in case of failure;
+         int; default: 5
+        param: nan_ratio; The maximum allowed ratio of NaN values in the data;
+         float; default: 0.25
+        :return: A tuple containing the index data as a pandas DataFrame and
+         an error message; Tuple[Optional[pd.DataFrame], Optional[str]]
+        """
+        if not isinstance(ric, str):
+            raise TypeError("'ric' must be of type 'str'!")
+
+        try:
+            index_stats_df, err = self.get_constituents_data(
+                rics=ric,
+                fields=fields,
+                target_date=target_date,
+                pre_fix=pre_fix,
+                parameters=parameters,
+                max_retries=max_retries
+            )
+        except Exception as e:
+            err = str(e)
+            index_stats_df = None
+
+        if (isinstance(index_stats_df, pd.DataFrame)
+                and not index_stats_df.empty):
+            nan_ratio_index_stats_df = index_stats_df.isnull().mean()
+            has_high_nan_ratio = (nan_ratio_index_stats_df >= nan_ratio).any()
+        else:
+            has_high_nan_ratio = True
+
+        if (err or not isinstance(index_stats_df, pd.DataFrame)
+                or has_high_nan_ratio or index_stats_df.empty):
+            self.logger.error(
+                f"Finally failed to download additional data"
+                f" for {ric} with fields {fields} at {target_date}."
+                f" Error: {err}"
+            )
+            return None, err
+
+        else:
+            self.logger.info(
+                f"Successfully downloaded additional data"
+                f" for {ric} with fields {fields} at {target_date}."
+            )
+            return index_stats_df, None
+
     @staticmethod
     def _empty_df_chain(
             ric: str
