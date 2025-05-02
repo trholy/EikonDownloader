@@ -90,16 +90,22 @@ class EikonDownloader:
         freq_map = {
             'months': 'M',
             'quarters': 'Q',
-            'years': 'Y'
+            'years': 'Y',
+            'm': 'M',
+            'q': 'Q',
+            'y': 'Y'
         }
 
         if frequency not in freq_map:
             raise ValueError(
-                "Invalid frequency! Choose from: 'months', 'quarters', 'years'."
+                "Invalid frequency! Choose from: 'months' ('m'),"
+                " 'quarters' ('q'), 'years' ('y')."
             )
 
         periods = num_years * {
-            'months': 12, 'quarters': 4, 'years': 1
+            'months': 12, 'm': 12,
+            'quarters': 4, 'q': 4,
+            'years': 1, 'y': 1
         }[frequency]
 
         target_dates = pd.date_range(
