@@ -338,28 +338,20 @@ class EikonDownloader:
             pre_fix: Optional[str] = None,
     ) -> Union[Tuple[None, str], Tuple[pd.DataFrame, None]]:
         """
-        Download data for a given Exchange Traded Product (ETP) chain
-         at a specific target date. This method retrieves the data for an
-         ETP chain by calling the `get_index_chain` method internally, and
-         handles retries and error logging. It returns the ETP chain data
-         as a DataFrame if successful, or an error message if the download
-         fails after the specified retries.
+        Retrieves the ETP chain data for a given ETP RIC on
+         a specified target date.
 
-        :param etp_ric: The Reuters Instrument Code (RIC) for the ETP chain
-         to download data for. Must be a string.
-        :param target_date: The target date for which to retrieve data. Can be
-         a string (e.g., '2025-12-31') or a datetime object.
-        :param fields: The fields to retrieve for the ETP chain. Can be a
-         single field as a string or a list of fields.
-        :param parameters: Optional dictionary of additional parameters for
-         the request (default is None).
-        :param max_retries: The maximum number of retries to attempt in case
-         of failure. Default is 5.
-        :param pre_fix: Optional prefix to be added to the `etp_ric` before
-         making the request. Default is None.
-        :return: A tuple containing:
-         - A pandas DataFrame with the requested ETP chain data if successful.
-         - An error message (string) if an error occurs, otherwise None.
+        param: etp_ric; The RIC (Reuters Instrument Code) of the ETP; str
+        param: target_date; The date for which to retrieve the ETP chain data;
+         Union[str, datetime]
+        param: fields; The fields to retrieve; Union[str, List[str]]
+        param: parameters; Additional parameters to pass to the
+         data retrieval function; Optional[dict]; default: None
+        param: max_retries; Maximum number of retries in case
+         of failure; int; default: 5
+        param: pre_fix; Prefix to be used in logging; Optional[str]; default: None
+        :return: A tuple containing the ETP chain data as a pandas DataFrame
+         and an error message; Union[Tuple[None, str], Tuple[pd.DataFrame, None]]
         """
         self.logger.info(
             f"Attempting to download data for ETP chain"
@@ -377,7 +369,9 @@ class EikonDownloader:
         )
 
         # Handle errors gracefully
-        if err:
+        if (err or etp_chain_df is None
+                or not isinstance(etp_chain_df, pd.DataFrame)
+                or etp_chain_df.empty):
             self.logger.error(
                 f"Failed to download ETP chain data"
                 f" for {etp_ric} at {target_date}. Error: {err}"
