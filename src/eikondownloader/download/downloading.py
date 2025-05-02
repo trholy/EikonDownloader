@@ -96,6 +96,11 @@ class EikonDownloader:
             'y': 'Y'
         }
 
+        if num_years <= 0 or num_years >= 100:
+            raise ValueError(
+                "Invalid number of years! Choose a value in (0, 100)."
+            )
+
         if frequency not in freq_map:
             raise ValueError(
                 "Invalid frequency! Choose from: 'months' ('m'),"
