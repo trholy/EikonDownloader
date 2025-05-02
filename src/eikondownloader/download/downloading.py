@@ -864,36 +864,34 @@ class EikonDownloader:
             object_: Union[tuple, pd.DataFrame]
     ) -> pd.DataFrame:
         """
-        Unpacks a tuple returned by `ek.get_data` to extract the DataFrame.
+        Unpacks a tuple to extract the first element if it is a pandas
+         DataFrame, or returns the DataFrame directly if the input is a DataFrame.
 
-        This static method checks if the input is a tuple. If it is, it
-         attempts to extract the first element and verifies it is a pandas
-         DataFrame. If the input is already a DataFrame, it is returned
-         directly. If the input doesn't match the expected types, an appropriate
-         error is raised.
-
-        :param object_: The input object, which can either be a tuple
-         or a DataFrame.
-
-        :return: The extracted DataFrame if the input is a tuple containing
-         one, or the DataFrame itself if the input is already a DataFrame.
-
-        :raises ValueError: If the tuple is empty.
-        :raises TypeError: If the first element of the tuple is not a DataFrame,
+        param: object_; The input object to unpack; Union[tuple, pd.DataFrame]
+        :return: A pandas DataFrame extracted from the tuple
+         or the input DataFrame; pd.DataFrame
+        :raises ValueError: If the input tuple is empty.
+        :raises TypeError: If the first element of the tuple is not a DataFrame
          or if the input is neither a tuple nor a DataFrame.
         """
-        if isinstance(object_, tuple):
-            if len(object_) == 0:
-                raise ValueError("Received an empty tuple. Cannot unpack.")
-            if not isinstance(object_[0], pd.DataFrame):
+        try:
+            if isinstance(object_, tuple):
+                if len(object_) == 0:
+                    raise ValueError("Received an empty tuple. Cannot unpack.")
+                if not isinstance(object_[0], pd.DataFrame):
+                    raise TypeError(
+                        "Expected a DataFrame as the first tuple element."
+                    )
+                return object_[0]
+            elif isinstance(object_, pd.DataFrame):
+                return object_
+            else:
                 raise TypeError(
-                    "Expected a DataFrame as the first tuple element.")
-            return object_[0]
-        elif isinstance(object_, pd.DataFrame):
-            return object_
-        else:
-            raise TypeError(
-                f"Expected tuple or DataFrame, got {type(object_).__name__}")
+                    f"Expected tuple or DataFrame, got {type(object_).__name__}"
+                )
+        except Exception as e:
+            logging.error(f"An unexpected error occurred: {e}")
+            raise
 
 
 class OSDownloader:
