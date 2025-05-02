@@ -62,6 +62,12 @@ class EikonDownloader:
             ek.set_app_key(api_key)
 
         self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.INFO)
+
+        # Add both handlers to the logger
+        self.logger.addHandler(console_handler)
+        self.logger.addHandler(file_handler)
+
         if api_key:
             try:
                 ek.set_app_key(api_key)
@@ -805,16 +811,29 @@ class EikonDownloader:
             ric: str
     ) -> pd.DataFrame:
         """
-        Creates an empty DataFrame with a single column corresponding to the
-         given RIC, filled with NaN values.
+        Creates an empty DataFrame with a single column named after the
+         given RIC and a single NaN value.
 
-        :param ric: The RIC (Reuters Instrument Code) to be used as the
-         column name for the DataFrame.
-
-        :return: An empty DataFrame with a column named after the provided
-         RIC and a row of NaN values.
+        param: ric; The RIC (Reuters Instrument Code) to be used
+         as the column name; str
+        :return: A pandas DataFrame with one column named after
+         the RIC and one NaN value; pd.DataFrame
+        :raises ValueError: If the RIC is None or an empty string.
+        :raises TypeError: If the RIC is not a string.
         """
-        return pd.DataFrame(columns=[ric], data=[np.nan])
+        try:
+            if ric is None:
+                raise ValueError("RIC cannot be None.")
+            if not isinstance(ric, str):
+                raise TypeError(
+                    f"RIC must be a string, got {type(ric).__name__}.")
+            if ric == "":
+                raise ValueError("RIC cannot be an empty string.")
+
+            return pd.DataFrame(columns=[ric], data=[[np.nan]])
+        except Exception as e:
+            logging.error(f"An unexpected error occurred: {e}")
+            raise
 
     def _empty_df_data(
             self,
