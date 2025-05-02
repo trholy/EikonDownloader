@@ -101,6 +101,7 @@ class EikonDownloader:
                 "Invalid number of years! Choose a value in (0, 100)."
             )
 
+        frequency = frequency.lower()
         if frequency not in freq_map:
             raise ValueError(
                 "Invalid frequency! Choose from: 'months' ('m'),"
