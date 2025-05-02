@@ -67,25 +67,18 @@ class EikonDownloader:
             reverse: bool = True
     ) -> List[str]:
         """
-        Generate a list of target dates based on the provided parameters.
+        Generates a list of target dates based on the specified end date,
+         number of years, and frequency.
 
-        This method generates a list of target dates starting from the
-         `end_date` and going backward for a specified number of years, based
-          on the given frequency (either months, quarters, or years). The dates
-          are formatted as strings in the "YYYY-MM-DD" format. The list can be
-           returned in reverse order if the `reserve` parameter is set to `True`.
-
-        :param end_date: The end date to generate target dates from. Can be
-         a string (e.g. '2025-12-31') or a datetime object.
-        :param num_years: The number of years to go back from the `end_date`.
-        :param frequency: The frequency of target dates, can be one of 'months',
-         'quarters', or 'years'.
-        :param reserve: If `True`, the returned list of dates will be in reverse
-         order. Defaults to `True`.
-        :return: A list of strings representing the target dates in
-         "YYYY-MM-DD" format.
-        :raises ValueError: If an invalid frequency is provided (anything
-         other than 'months', 'quarters', or 'years').
+        param: end_date; Union[str, datetime]; The end date for the date range.
+         Can be a string in a format recognized by pandas or a datetime object.
+        param: num_years; int; The number of years to generate dates for.
+         Must be between 1 and 99.
+        param: frequency; str; The frequency of the dates to generate.
+         Must be one of 'months' ('m'), 'quarters' ('q'), or 'years' ('y').
+        param: reverse; bool; If True, the list of dates will be reversed so
+         that the most recent date comes first. Defaults to True.
+        :return: List[str]; A list of date strings in the format 'YYYY-MM-DD'.
         """
         freq_map = {
             'months': 'M',
