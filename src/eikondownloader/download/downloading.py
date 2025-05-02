@@ -62,6 +62,12 @@ class EikonDownloader:
             ek.set_app_key(api_key)
 
         self.logger = logging.getLogger(__name__)
+        if api_key:
+            try:
+                ek.set_app_key(api_key)
+            except Exception as e:
+                self.logger.error(f"Failed to set Eikon API key: {e}")
+                raise
 
     @staticmethod
     def generate_target_dates(
