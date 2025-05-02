@@ -128,31 +128,23 @@ class EikonDownloader:
             start_date: Optional[Union[str, datetime, np.datetime64]] = None
     ) -> Tuple[List[str], List[str]]:
         """
-        Generate start and end dates for each decade within the specified
-         date range.
+        Generates lists of start and end dates for each decade within the
+         specified range.
 
-        This method generates a list of start and end dates for each decade,
-         with the start date being the first day of the decade (January 1st
-         of a year ending in 0) and the end date being the last day of the
-         decade. The date range is determined by either providing a specific
-          `start_date` or  by calculating it using the `num_years` parameter
-          (which represents how many years before the `end_date` the start
-           date should be).
-
-        :param end_date: The end date of the date range. Can be a string
-         (e.g. '2025-12-31'), datetime object, or np.datetime64.
-        :param num_years: The number of years before the `end_date` to
-         calculate the start date. Used only if `start_date` is not provided.
-        :param start_date: The start date of the date range. Can be a string
-         (e.g. '2010-01-01'), datetime object, or np.datetime64. If not
-          provided, `num_years` must be provided to determine the start date.
-        :return: A tuple containing two lists:
-         - A list of start dates (the first day of each decade in
-          "YYYY-MM-DD" format).
-         - A list of end dates (the last day of each decade in
-          "YYYY-MM-DD" format).
-        :raises ValueError: If `start_date` is later than `end_date`,
-         or if neither `start_date` nor `num_years` is provided.
+        param: end_date; Union[str, datetime, np.datetime64]; The end date
+         for the date range. Can be a string in 'YYYY-MM-DD' format, a datetime
+         object, or a numpy datetime64 object.
+        param: num_years; Optional[int]; The number of years to generate dates
+         for, starting from the end_date. If provided, start_date is calculated
+         as end_date minus num_years.
+        param: start_date; Optional[Union[str, datetime, np.datetime64]]; The
+         start date for the date range. Can be a string in 'YYYY-MM-DD' format,
+          a datetime object, or a numpy datetime64 object. If not provided,
+          it is calculated based on num_years.
+        :return: Tuple[List[str], List[str]]; A tuple containing two lists of
+         date strings in the format 'YYYY-MM-DD'. The first list contains the
+          start dates of each decade, and the second list contains the
+          end dates of each decade.
         """
         if isinstance(end_date, str):
             end_date = datetime.strptime(end_date, "%Y-%m-%d")
