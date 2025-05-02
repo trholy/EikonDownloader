@@ -398,42 +398,34 @@ class EikonDownloader:
             corax: str = 'adjusted',
             calendar: Optional[str] = None,
             count: Optional[int] = None,
-    ) -> Optional[pd.DataFrame]:
+    ) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
         """
-        Download index data for a given index within a specified date range and
-         merge multiple requests. This method retrieves historical index data
-         based on the specified start and end dates, and other optional
-         parameters like fields, interval, and calendar. It then merges the
-         data and returns it as a DataFrame. The method handles retries in case
-         of failures and logs the success or failure of each download attempt.
+        Retrieves the timeseries data for a given index RIC within
+         a specified date range.
 
-        :param index_ric: The Reuters Instrument Code (RIC) for the index to
-         download data for. Must be a string.
-        :param fields: The fields to retrieve for the index, default is 'CLOSE'.
-         Can be a single field as a string or a list of fields.
-        :param end_date: The reference date to end the data range. Can be a
-         string (e.g., '2025-12-31') or a datetime object.
-        :param num_years: The number of years to go back from the `end_date`
-         to generate past target dates.
-        :param start_date: The reference date to start the data range. Can be
-         a string (e.g., '2015-01-01') or a datetime object.
-        :param pre_fix: Optional prefix to be added to the `index_ric` before
-         making the request. Default is '.'.
-        :param max_retries: The maximum number of retries in case of failure.
-         Default is 5.
-        :param interval: The data interval to retrieve. Possible values:
-         'tick', 'minute', 'hour', 'daily', 'weekly', 'monthly', 'quarterly',
-          'yearly'.
-        :param corax: The adjustment type for data. Possible values:
-         'adjusted', 'unadjusted'.
-        :param calendar: The calendar type to use. Possible values: 'native',
-         'tradingdays', 'calendardays'.
-        :param count: The maximum number of data points to retrieve.
-
-        :return: A pandas DataFrame with the requested index data, or None
-         if no data is retrieved.
-        :raises TypeError: If `index_ric` is provided as a list rather than
-         a string.
+        param: index_ric; The RIC (Reuters Instrument Code) of the index; str
+        param: end_date; The end date for the timeseries data;
+         Union[str, datetime]
+        param: num_years; The number of years of data to retrieve;
+         Optional[int]; default: None
+        param: start_date; The start date for the timeseries data;
+         Optional[Union[str, datetime]]; default: None
+        param: pre_fix; Prefix to be added to the index RIC;
+         Union[str, None]; default: "."
+        param: max_retries; Maximum number of retries in case of failure;
+         int; default: 5
+        param: fields; The fields to retrieve; Union[str, List[str]];
+         default: 'CLOSE'
+        param: interval; The interval of the timeseries data
+         (e.g., 'daily', 'weekly'); str; default: "daily"
+        param: corax; The type of price adjustment ('adjusted', 'unadjusted');
+         str; default: 'adjusted'
+        param: calendar; The calendar to use for the timeseries data;
+         Optional[str]; default: None
+        param: count; The number of data points to retrieve; Optional[int];
+         default: None
+        :return: A tuple containing the timeseries data as a pandas DataFrame
+         and an error message; Tuple[Optional[pd.DataFrame], Optional[str]]
         """
         if isinstance(index_ric, list):
             raise TypeError("'index_ric' has to be of type 'str', not 'list'!")
@@ -441,13 +433,8 @@ class EikonDownloader:
         if isinstance(pre_fix, str) and isinstance(index_ric, str):
             index_ric = pre_fix + index_ric
 
-        self.logger.info(
-            f"Starting download for index {index_ric}"
-            f" from {start_date} to {end_date}."
-        )
-
         # Call get_stock_timeseries to fetch the data
-        index_timeseries_df = self.get_stock_timeseries(
+        index_timeseries_df, err = self.get_stock_timeseries(
             index_df=None,
             ric=index_ric,
             end_date=end_date,
@@ -462,23 +449,27 @@ class EikonDownloader:
         )
 
         # Check if data was retrieved successfully
-        if index_timeseries_df is None or index_timeseries_df.empty:
+        if (err or index_timeseries_df is None or
+                not isinstance(index_timeseries_df, pd.DataFrame)
+                or index_timeseries_df.empty):
             self.logger.warning(
                 f"No data retrieved for {index_ric}"
                 f" from {start_date} to {end_date}."
             )
-            return None
+            return None, err
 
         # Rename the 'CLOSE' column to match the index RIC
-        if 'CLOSE' in index_timeseries_df.columns:
-            index_timeseries_df.rename(
-                columns={'CLOSE': index_ric},
-                inplace=True
-            )
+        if isinstance(index_timeseries_df, pd.DataFrame):
+            df_columns = [
+                column.lower() for column in index_timeseries_df.columns
+            ]
+            if 'CLOSE'.lower() in df_columns:
+                self.logger.debug(f'Renaming column "CLOSE" to {index_ric}.')
+                index_timeseries_df.rename(
+                    columns={'CLOSE': index_ric}, inplace=True
+                )
 
-        self.logger.info(f"Successfully downloaded index data for {index_ric}.")
-
-        return index_timeseries_df
+        return index_timeseries_df, None
 
     def get_stock_timeseries(
             self,
