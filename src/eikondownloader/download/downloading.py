@@ -169,25 +169,32 @@ class EikonDownloader:
             start_date = start_date + timedelta(days=1)
         else:
             raise ValueError(
-                "Either 'num_years' or 'start_date' must be provided.")
+                "Either 'num_years' or 'start_date' must be provided."
+            )
 
         if start_date > end_date:
             raise ValueError("'start_date' cannot be later than 'end_date'.")
 
         start_dates, end_dates = [], []
-        current_date = end_date
+        current_year = end_date.year
 
-        while current_date >= start_date:
-            end_dates.append(current_date.strftime("%Y-%m-%d"))
-            start_of_decade = datetime(current_date.year - 9, 1, 1)
+        while current_year >= start_date.year:
+            end_of_decade = datetime(current_year, 12, 31)
+            start_of_decade = datetime(current_year - 9, 1, 1)
+
+            if end_of_decade < start_date:
+                break
 
             if start_of_decade < start_date:
                 start_of_decade = start_date
-            if current_date == start_of_decade:
-                break
+
+            if end_of_decade > end_date:
+                end_of_decade = end_date
 
             start_dates.append(start_of_decade.strftime("%Y-%m-%d"))
-            current_date = start_of_decade.replace(year=current_date.year - 10)
+            end_dates.append(end_of_decade.strftime("%Y-%m-%d"))
+
+            current_year -= 10
 
         return start_dates, end_dates
 
