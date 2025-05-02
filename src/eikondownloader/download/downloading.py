@@ -113,6 +113,12 @@ class EikonDownloader:
             'years': 1, 'y': 1
         }[frequency]
 
+        try:
+            end_date = pd.to_datetime(end_date)
+        except pd.errors.ParserError as e:
+            raise ValueError(f"Invalid end_date format: {e}")
+        end_date = end_date.strftime("%Y-%m-%d")
+
         target_dates = pd.date_range(
             end=end_date,
             periods=periods,
