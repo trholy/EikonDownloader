@@ -828,36 +828,51 @@ class EikonDownloader:
 
     def _apply_request_delay(self) -> None:
         """
-        Applies a delay between requests if the delay time is specified
-         and greater than zero.
+        Applies a delay to the request by sleeping
+         for a specified number of seconds.
 
         :return: None
         """
-        if isinstance(self.request_delay,
-                      (int, float)) and self.request_delay > 0:
+        if (isinstance(self.request_delay, (int, float))
+                and self.request_delay > 0):
+            logging.debug(
+                f"Applying request delay of {self.request_delay} seconds."
+            )
             time.sleep(self.request_delay)
 
     def _apply_request_limit_delay(self) -> None:
         """
-        Applies a delay when the request limit is reached, based on
-         the specified delay time.
+        Applies a delay due to request limits by sleeping
+         for a specified number of hours.
 
         :return: None
         """
-        if isinstance(self.request_limit_delay,
-                      (int, float)) and self.request_limit_delay > 0:
-            time.sleep(self.request_limit_delay)
+        if (isinstance(self.request_limit_delay, (int, float))
+                and self.request_limit_delay > 0):
+            logging.debug(
+                f"Applying request limit delay"
+                f" of {self.request_limit_delay} hours."
+            )
+            time.sleep(self.request_limit_delay * 3600)
 
     def _apply_proxy_error_delay(self) -> None:
         """
-        Applies a delay when the proxy is not running or can't be reached,
-         based on the specified delay time.
+        Applies a delay due to proxy errors by sleeping
+         for a specified number of hours.
 
         :return: None
         """
         if isinstance(self.proxy_error_delay,
                       (int, float)) and self.proxy_error_delay > 0:
             time.sleep(self.proxy_error_delay)
+        if (isinstance(self.proxy_error_delay, (int, float))
+                and self.proxy_error_delay > 0):
+            logging.debug(
+                f"Applying proxy error delay"
+                f" of {self.proxy_error_delay} hours."
+            )
+            time.sleep(self.proxy_error_delay * 3600)
+
 
     @staticmethod
     def _unpack_tuple(
