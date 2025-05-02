@@ -25,10 +25,12 @@ class EikonDownloader:
     def __init__(
             self,
             api_key: Optional[str] = None,
-            request_delay: Optional[Union[int, float]] = 2,
-            request_limit_delay: Optional[Union[int, float]] = 3600,
-            proxy_error_delay: Optional[Union[int, float]] = 3600,
-            error_delay: Optional[Union[int, float]] = 10,
+            request_delay: Optional[Union[int, float]] = 3,
+            general_error_delay: Optional[Union[int, float]] = 5,
+            gateway_delay: Optional[Union[int, float]] = 5,
+            request_limit_delay: Optional[Union[int, float]] = 6,
+            proxy_error_delay: Optional[Union[int, float]] = 6,
+            network_error_delay: Optional[Union[int, float]] = 1
     ):
         """
         Initializes the object with necessary configuration settings and sets
@@ -53,6 +55,9 @@ class EikonDownloader:
         self.request_limit_delay = request_limit_delay
         self.proxy_error_delay = proxy_error_delay
         self.error_delay = error_delay
+        self.general_error_delay = general_error_delay
+        self.network_error_delay = network_error_delay
+        self.gateway_delay = gateway_delay
 
         if api_key:
             ek.set_app_key(api_key)
@@ -840,6 +845,34 @@ class EikonDownloader:
             )
             time.sleep(self.request_delay)
 
+    def _apply_general_error_delay(self) -> None:
+        """
+        Applies a delay due to general errors by
+         sleeping for a specified number of minutes.
+
+        :return: None
+        """
+        if (isinstance(self.general_error_delay, (int, float))
+                and self.general_error_delay > 0):
+            logging.debug(
+                f"Applying error delay of {self.general_error_delay} minutes."
+            )
+            time.sleep(self.general_error_delay * 60)
+
+    def _apply_gateway_delay(self) -> None:
+        """
+        Applies a delay due to Gateway Time-out errors by
+         sleeping for a specified number of minutes.
+
+        :return: None
+        """
+        if (isinstance(self.gateway_delay, (int, float))
+                and self.gateway_delay > 0):
+            logging.debug(
+                f"Applying error delay of {self.gateway_delay} minutes."
+            )
+            time.sleep(self.gateway_delay * 60)
+
     def _apply_request_limit_delay(self) -> None:
         """
         Applies a delay due to request limits by sleeping
@@ -862,9 +895,6 @@ class EikonDownloader:
 
         :return: None
         """
-        if isinstance(self.proxy_error_delay,
-                      (int, float)) and self.proxy_error_delay > 0:
-            time.sleep(self.proxy_error_delay)
         if (isinstance(self.proxy_error_delay, (int, float))
                 and self.proxy_error_delay > 0):
             logging.debug(
@@ -873,6 +903,20 @@ class EikonDownloader:
             )
             time.sleep(self.proxy_error_delay * 3600)
 
+    def _apply_network_error_delay(self) -> None:
+        """
+        Applies a delay due to networks errors by sleeping
+         for a specified number of hours.
+
+        :return: None
+        """
+        if (isinstance(self.network_error_delay, (int, float))
+                and self.network_error_delay > 0):
+            logging.debug(
+                f"Applying proxy error delay"
+                f" of {self.network_error_delay} hours."
+            )
+            time.sleep(self.network_error_delay * 3600)
 
     @staticmethod
     def _unpack_tuple(
