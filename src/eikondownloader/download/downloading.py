@@ -64,7 +64,7 @@ class EikonDownloader:
             end_date: Union[str, datetime],
             num_years: int,
             frequency: str,
-            reserve: bool = True
+            reverse: bool = True
     ) -> List[str]:
         """
         Generate a list of target dates based on the provided parameters.
@@ -108,7 +108,7 @@ class EikonDownloader:
             freq=freq_map[frequency]
         ).strftime("%Y-%m-%d").tolist()
 
-        return target_dates if not reserve else target_dates[::-1]
+        return target_dates if not reverse else target_dates[::-1]
 
     @staticmethod
     def generate_decade_dates(
