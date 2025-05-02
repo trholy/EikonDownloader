@@ -69,7 +69,7 @@ for index_name in indices_list:
         os.makedirs(index_df_path)
 
     # Get index time series
-    index_df = downloader.get_index_timeseries(
+    index_df, err = downloader.get_index_timeseries(
         index_ric=name_mapping_dict.get(index_name, index_name),
         end_date=end_date,
         num_years=None,
@@ -82,6 +82,9 @@ for index_name in indices_list:
         count=None
     )
 
+    if err is not None:
+        logger.error(f"An error occurred:\n{err}")
+
     if index_df is not None and not index_df.empty:
         # Start with download of index stocks
         logger.info(
@@ -89,7 +92,7 @@ for index_name in indices_list:
             f" Starting download of\n{uni_rics}\n")
 
         for counter, ric in enumerate(uni_rics):
-            index_df = downloader.get_stock_timeseries(
+            index_df, err = downloader.get_stock_timeseries(
                 index_df=index_df,
                 ric=ric,
                 end_date=end_date,
@@ -102,6 +105,9 @@ for index_name in indices_list:
                 calendar=None,
                 count=None
             )
+
+            if err is not None:
+                logger.error(f"An error occurred:\n{err}")
 
             percent_done = round(((counter + 1) / len(uni_rics)) * 100, 2)
             logger.info(f"[{percent_done}%] Download {ric} completed.\n")

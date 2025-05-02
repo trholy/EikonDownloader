@@ -65,6 +65,8 @@ target_dates = downloader.generate_target_dates(
 )
 logger.info(f"Target dates:\n{target_dates}\n")
 
+error_instances = {}
+
 # Loop through indices
 for index_name in indices_list:
 
@@ -101,7 +103,7 @@ for index_name in indices_list:
             )
 
             # Download index additional data at target date
-            additional_stock_data_df_, err = downloader.get_additional_data(
+            additional_stock_data_df_, err = downloader.get_constituents_data(
                 rics=rics,
                 fields=data_fields,
                 target_date=target_date,
@@ -111,6 +113,9 @@ for index_name in indices_list:
                 additional_stock_data_df_list.append(additional_stock_data_df_)
 
             if err is not None:
+                error_instances.setdefault(index_name, []).append(
+                    (target_date, err)
+                )
                 logger.error(f"An error occurred:\n{err}")
 
         # Merge chunked dataframes
@@ -131,7 +136,7 @@ for index_name in indices_list:
             os.makedirs(additional_stock_data_path)
 
         # Save downloaded dataframe
-        if merged_df is not None and not merged_df.empty:
+        if not err and merged_df is not None and not merged_df.empty:
 
             merged_df.to_csv(
                 path_or_buf=f"{additional_stock_data_path}"
@@ -143,3 +148,5 @@ for index_name in indices_list:
                 f"Saved {index_name} at {target_date}"
                 f" to {additional_stock_data_path}"
             )
+
+logger.error(f"error habe occurred:\n{error_instances}")

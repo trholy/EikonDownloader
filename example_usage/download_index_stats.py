@@ -66,6 +66,8 @@ logger.info(
     f"Using fields: {additional_index_data_fields} for type: {target_type}"
 )
 
+error_instances = {}
+
 # Loop through indices
 for index_name in indices_list:
 
@@ -87,8 +89,8 @@ for index_name in indices_list:
         logger.info(f"\nActual target date for {index_name}: {target_date}")
 
         # Download additional index data at target date
-        additional_index_data_df, err = downloader.get_additional_data(
-            rics=index_name,
+        additional_index_data_df, err = downloader.get_index_data(
+            ric=index_name,
             fields=additional_index_data_fields,
             pre_fix=".",
             target_date=target_date,
@@ -96,6 +98,9 @@ for index_name in indices_list:
         )
 
         if err is not None:
+            error_instances.setdefault(index_name, []).append(
+                (target_date, err)
+            )
             logger.error(f"An error occurred:\n{err}")
 
         # Create directory if not existing
@@ -106,7 +111,7 @@ for index_name in indices_list:
             os.makedirs(additional_index_data_path)
 
         # Save downloaded dataframe
-        if (additional_index_data_df is not None
+        if (not err and additional_index_data_df is not None
                 and not additional_index_data_df.empty):
             additional_index_data_df.to_csv(
                 path_or_buf=f"{additional_index_data_path}"
@@ -118,3 +123,5 @@ for index_name in indices_list:
                 f"\nSaved {index_name} at {target_date}"
                 f" to {additional_index_data_path}"
             )
+
+logger.error(f"error habe occurred:\n{error_instances}")
