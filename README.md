@@ -19,7 +19,7 @@ pip install .
 
 ## Documentation
 
-Read the documentation on GitLab Pages for more information on how to use the package.
+Read the [documentation on GitLab Pages](https://to82lod.gitpages.uni-jena.de/eikondownloader/) for more information on how to use the package.
 
 ## Usage
 
