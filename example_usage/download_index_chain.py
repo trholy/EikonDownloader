@@ -45,10 +45,7 @@ data_fields = [
 
 # Initialize downloader
 downloader = EikonDownloader(
-    api_key=api_key,
-    request_delay=2,
-    request_limit_delay=3600,
-    error_delay=10
+    api_key=api_key
 )
 
 # Generate target dates
@@ -58,6 +55,8 @@ target_dates = downloader.generate_target_dates(
     frequency="quarters"  # Options: 'months', 'quarters', 'years'
 )
 logger.info(f"Target dates:\n{target_dates}")
+
+error_instances = {}
 
 # Loop through indices and target dates
 for index_name in indices_list:
@@ -79,6 +78,9 @@ for index_name in indices_list:
             pre_fix="0#."
         )
         if err is not None:
+            error_instances.setdefault(index_name, []).append(
+                (target_date, err)
+            )
             logger.error(f"An error occurred:\n{err}")
 
         # Create directory if not existing
@@ -87,7 +89,7 @@ for index_name in indices_list:
             os.makedirs(index_chain_df_path, exist_ok=True)
 
         # Save downloaded dataframe
-        if index_chain_df is not None and not index_chain_df.empty:
+        if not err and index_chain_df is not None and not index_chain_df.empty:
             index_chain_df.to_csv(
                 path_or_buf=f"{index_chain_df_path}"
                             f"{index_name}_chain_{target_date}.csv",
@@ -97,3 +99,5 @@ for index_name in indices_list:
             logger.info(
                 f"Saved {index_name} at {target_date} to {index_chain_df_path}"
             )
+
+logger.error(f"error habe occurred:\n{error_instances}")

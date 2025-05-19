@@ -6,7 +6,7 @@ from minio.error import S3Error
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional, Tuple, Union
-from datetime import datetime
+from datetime import datetime, timedelta
 import hashlib
 import logging
 import time
@@ -14,92 +14,127 @@ import os
 import re
 
 
-# Configure logging to remove the default prefix
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(message)s',
-)
-
-
 class EikonDownloader:
     def __init__(
             self,
-            api_key: str,
-            request_delay: Optional[Union[int, float]] = 2,
-            request_limit_delay: Optional[Union[int, float]] = 3600,
-            proxy_error_delay: Optional[Union[int, float]] = 3600,
-            error_delay: Optional[Union[int, float]] = 10,
+            api_key: Optional[str] = None,
+            request_delay: Optional[Union[int, float]] = 3,
+            general_error_delay: Optional[Union[int, float]] = 5,
+            gateway_delay: Optional[Union[int, float]] = 5,
+            request_limit_delay: Optional[Union[int, float]] = 6,
+            proxy_error_delay: Optional[Union[int, float]] = 6,
+            network_error_delay: Optional[Union[int, float]] = 1
     ):
         """
-        Initializes the object with necessary configuration settings and sets
-         up the Eikon API key. This constructor sets the default delays
-         for request, request limit, and error handling. It also configures
-         the Eikon API by setting the provided `api_key`. Additionally,
-         a logger is initialized for tracking the operations.
+        Initializes the EikonDownloader class with optional parameters for API
+         key and various delay settings.
 
-        :param api_key: The Eikon API key to authenticate requests.
-        :param request_delay: The delay (in seconds) between each request
-         to avoid overwhelming the server. Default is 1 second.
-        :param request_limit_delay: The delay (in seconds) when the request
-         limit is reached. Default is 3600 seconds (1 hour).
-        :param proxy_error_delay: The delay (in seconds) when the proxy can't
-         be reached. Default is 3600 seconds (1 hour).
-        :param error_delay: The delay (in seconds) to wait after encountering
-         an error. Default is 5 seconds.
-
-        :return: None
+        param: api_key; Optional[str]; An optional Eikon API key to
+         authenticate requests. Defaults to None.
+        param: request_delay; Optional[Union[int, float]]; The delay in
+         seconds between requests to avoid hitting rate limits. Defaults to 3.
+        param: general_error_delay; Optional[Union[int, float]]; The delay in
+         minutes to wait when a general error occurs. Defaults to 5.
+        param: gateway_delay; Optional[Union[int, float]]; The delay in
+         minutes to wait when a Gateway Time-out. Defaults to 5.
+        param: request_limit_delay; Optional[Union[int, float]]; The delay in
+         hours to wait when a request limit is reached. Defaults to 6.
+        param: proxy_error_delay; Optional[Union[int, float]]; The delay in
+         hours to wait when a proxy error occurs. Defaults to 6.
+        param: network_error_delay; Optional[Union[int, float]]; The delay in
+         hours to wait when a general error occurs. Defaults to 1.
         """
         self.request_delay = request_delay
         self.request_limit_delay = request_limit_delay
         self.proxy_error_delay = proxy_error_delay
-        self.error_delay = error_delay
+        self.general_error_delay = general_error_delay
+        self.network_error_delay = network_error_delay
+        self.gateway_delay = gateway_delay
 
-        ek.set_app_key(api_key)
+        # Create formatters: simpler for console, detailed for file
+        console_formatter = logging.Formatter('%(levelname)s: %(message)s')
+        file_formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
 
+        # Set up console handler and assign the console formatter
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(console_formatter)
+
+        # Set up file handler and assign the file formatter
+        file_handler = logging.FileHandler(
+            f"{EikonDownloader.__name__}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        )
+        file_handler.setFormatter(file_formatter)
+
+        # Create a logger and set its level to INFO
         self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.INFO)
+
+        # Add both handlers to the logger
+        self.logger.addHandler(console_handler)
+        self.logger.addHandler(file_handler)
+
+        if api_key:
+            try:
+                ek.set_app_key(api_key)
+            except Exception as e:
+                self.logger.error(f"Failed to set Eikon API key: {e}")
+                raise
 
     @staticmethod
     def generate_target_dates(
             end_date: Union[str, datetime],
             num_years: int,
             frequency: str,
-            reserve: bool = True
+            reverse: bool = True
     ) -> List[str]:
         """
-        Generate a list of target dates based on the provided parameters.
+        Generates a list of target dates based on the specified end date,
+         number of years, and frequency.
 
-        This method generates a list of target dates starting from the
-         `end_date` and going backward for a specified number of years, based
-          on the given frequency (either months, quarters, or years). The dates
-          are formatted as strings in the "YYYY-MM-DD" format. The list can be
-           returned in reverse order if the `reserve` parameter is set to `True`.
-
-        :param end_date: The end date to generate target dates from. Can be
-         a string (e.g. '2025-12-31') or a datetime object.
-        :param num_years: The number of years to go back from the `end_date`.
-        :param frequency: The frequency of target dates, can be one of 'months',
-         'quarters', or 'years'.
-        :param reserve: If `True`, the returned list of dates will be in reverse
-         order. Defaults to `True`.
-        :return: A list of strings representing the target dates in
-         "YYYY-MM-DD" format.
-        :raises ValueError: If an invalid frequency is provided (anything
-         other than 'months', 'quarters', or 'years').
+        param: end_date; Union[str, datetime]; The end date for the date range.
+         Can be a string in a format recognized by pandas or a datetime object.
+        param: num_years; int; The number of years to generate dates for.
+         Must be between 1 and 99.
+        param: frequency; str; The frequency of the dates to generate.
+         Must be one of 'months' ('m'), 'quarters' ('q'), or 'years' ('y').
+        param: reverse; bool; If True, the list of dates will be reversed so
+         that the most recent date comes first. Defaults to True.
+        :return: List[str]; A list of date strings in the format 'YYYY-MM-DD'.
         """
         freq_map = {
             'months': 'M',
             'quarters': 'Q',
-            'years': 'Y'
+            'years': 'Y',
+            'm': 'M',
+            'q': 'Q',
+            'y': 'Y'
         }
 
+        if num_years <= 0 or num_years >= 100:
+            raise ValueError(
+                "Invalid number of years! Choose a value in (0, 100)."
+            )
+
+        frequency = frequency.lower()
         if frequency not in freq_map:
             raise ValueError(
-                "Invalid frequency! Choose from: 'months', 'quarters', 'years'."
+                "Invalid frequency! Choose from: 'months' ('m'),"
+                " 'quarters' ('q'), 'years' ('y')."
             )
 
         periods = num_years * {
-            'months': 12, 'quarters': 4, 'years': 1
+            'months': 12, 'm': 12,
+            'quarters': 4, 'q': 4,
+            'years': 1, 'y': 1
         }[frequency]
+
+        try:
+            end_date = pd.to_datetime(end_date)
+        except pd.errors.ParserError as e:
+            raise ValueError(f"Invalid end_date format: {e}")
+        end_date = end_date.strftime("%Y-%m-%d")
 
         target_dates = pd.date_range(
             end=end_date,
@@ -107,7 +142,7 @@ class EikonDownloader:
             freq=freq_map[frequency]
         ).strftime("%Y-%m-%d").tolist()
 
-        return target_dates if not reserve else target_dates[::-1]
+        return target_dates if not reverse else target_dates[::-1]
 
     @staticmethod
     def generate_decade_dates(
@@ -116,31 +151,23 @@ class EikonDownloader:
             start_date: Optional[Union[str, datetime, np.datetime64]] = None
     ) -> Tuple[List[str], List[str]]:
         """
-        Generate start and end dates for each decade within the specified
-         date range.
+        Generates lists of start and end dates for each decade within the
+         specified range.
 
-        This method generates a list of start and end dates for each decade,
-         with the start date being the first day of the decade (January 1st
-         of a year ending in 0) and the end date being the last day of the
-         decade. The date range is determined by either providing a specific
-          `start_date` or  by calculating it using the `num_years` parameter
-          (which represents how many years before the `end_date` the start
-           date should be).
-
-        :param end_date: The end date of the date range. Can be a string
-         (e.g. '2025-12-31'), datetime object, or np.datetime64.
-        :param num_years: The number of years before the `end_date` to
-         calculate the start date. Used only if `start_date` is not provided.
-        :param start_date: The start date of the date range. Can be a string
-         (e.g. '2010-01-01'), datetime object, or np.datetime64. If not
-          provided, `num_years` must be provided to determine the start date.
-        :return: A tuple containing two lists:
-         - A list of start dates (the first day of each decade in
-          "YYYY-MM-DD" format).
-         - A list of end dates (the last day of each decade in
-          "YYYY-MM-DD" format).
-        :raises ValueError: If `start_date` is later than `end_date`,
-         or if neither `start_date` nor `num_years` is provided.
+        param: end_date; Union[str, datetime, np.datetime64]; The end date
+         for the date range. Can be a string in 'YYYY-MM-DD' format, a datetime
+         object, or a numpy datetime64 object.
+        param: num_years; Optional[int]; The number of years to generate dates
+         for, starting from the end_date. If provided, start_date is calculated
+         as end_date minus num_years.
+        param: start_date; Optional[Union[str, datetime, np.datetime64]]; The
+         start date for the date range. Can be a string in 'YYYY-MM-DD' format,
+          a datetime object, or a numpy datetime64 object. If not provided,
+          it is calculated based on num_years.
+        :return: Tuple[List[str], List[str]]; A tuple containing two lists of
+         date strings in the format 'YYYY-MM-DD'. The first list contains the
+          start dates of each decade, and the second list contains the
+          end dates of each decade.
         """
         if isinstance(end_date, str):
             end_date = datetime.strptime(end_date, "%Y-%m-%d")
@@ -154,21 +181,35 @@ class EikonDownloader:
                 start_date = pd.Timestamp(start_date).to_pydatetime()
         elif num_years is not None:
             start_date = end_date.replace(year=end_date.year - num_years)
+            start_date = start_date + timedelta(days=1)
         else:
             raise ValueError(
-                "Either 'num_years' or 'start_date' must be provided.")
+                "Either 'num_years' or 'start_date' must be provided."
+            )
 
         if start_date > end_date:
             raise ValueError("'start_date' cannot be later than 'end_date'.")
 
         start_dates, end_dates = [], []
-        current_date = end_date
+        current_year = end_date.year
 
-        while current_date >= start_date:
-            end_dates.append(current_date.strftime("%Y-%m-%d"))
-            start_of_decade = datetime(current_date.year - 9, 1, 1)
+        while current_year >= start_date.year:
+            end_of_decade = datetime(current_year, 12, 31)
+            start_of_decade = datetime(current_year - 9, 1, 1)
+
+            if end_of_decade < start_date:
+                break
+
+            if start_of_decade < start_date:
+                start_of_decade = start_date
+
+            if end_of_decade > end_date:
+                end_of_decade = end_date
+
             start_dates.append(start_of_decade.strftime("%Y-%m-%d"))
-            current_date = start_of_decade.replace(year=current_date.year - 10)
+            end_dates.append(end_of_decade.strftime("%Y-%m-%d"))
+
+            current_year -= 10
 
         return start_dates, end_dates
 
@@ -182,43 +223,38 @@ class EikonDownloader:
             pre_fix: Optional[str] = "0#."
     ) -> Tuple[pd.DataFrame, Optional[str]]:
         """
-        Retrieve the index chain for a given index RIC and target date.
+        Retrieves the index chain data for a specified index RIC at a given
+         target date.
 
-        This method downloads the index chain data for a specified index RIC
-         at a given target date, with optional retries and error handling.
-         The index RIC is prefixed with a default or provided string, and the
-         method can request one or more fields. If the download fails after
-         the specified number of retries, an empty DataFrame is returned
-         along with an error message.
-
-        :param index_ric: The Reuters Instrument Code (RIC) for the index.
-         Must be a string.
-        :param target_date: The target date for the index data. Can be a string
-         (e.g. '2025-12-31') or a datetime object.
-        :param fields: The fields to retrieve for the index. Can be a single
-         field as a string or a list of fields.
-        :param parameters: Optional dictionary of additional parameters for
-         the request (default is None).
-        :param max_retries: The maximum number of retries to attempt in case
-         of failure. Default is 5.
-        :param pre_fix: A prefix to be added to the `index_ric` before making
-         the request. Default is "0#.".
-        :return: A tuple containing:
-         - A pandas DataFrame with the requested index chain data.
-         - An optional error message if an error occurs, otherwise None.
-        :raises TypeError: If `index_ric` is not a string.
+        param: index_ric; str; The RIC (Reuters Instrument Code) of the index.
+        param: target_date; Union[str, datetime]; The target date for which
+         to retrieve the index chain data. Can be a string in 'YYYY-MM-DD'
+         format or a datetime object.
+        param: fields; Union[str, List[str]]; The fields to retrieve.
+         Can be a single field as a string or a list of fields.
+        param: parameters; Optional[dict]; Additional parameters to pass
+         to the Eikon API. Defaults to None.
+        param: max_retries; int; The maximum number of retries to attempt
+         if the request fails. Defaults to 5.
+        param: pre_fix; Optional[str]; A prefix to prepend to the index RIC.
+         Defaults to "0#.".
+        :return: Tuple[pd.DataFrame, Optional[str]]; A tuple containing
+         a DataFrame with the index chain data and an optional error message.
+          If the data retrieval is successful, the error message will be None.
         """
         if not isinstance(index_ric, str):
             raise TypeError("'index_ric' must be of type 'str'!")
 
-        if pre_fix:
+        if isinstance(pre_fix, str):
             index_ric = pre_fix + index_ric
 
         if isinstance(fields, str):
             fields = [fields]
 
-        retry_count = 0
+        if isinstance(target_date, datetime):
+            target_date = target_date.strftime('%Y-%m-%d')
 
+        retry_count = 0
         while retry_count < max_retries:
             try:
                 self._apply_request_delay()
@@ -233,50 +269,70 @@ class EikonDownloader:
                     field_name=False
                 )
 
-                if index_chain_df is not None and not index_chain_df.empty:
+                if (isinstance(index_chain_df, pd.DataFrame)
+                        and not index_chain_df.empty):
                     self.logger.info(
                         f"Successfully downloaded {index_ric} at {target_date}."
                     )
                     return index_chain_df, None
-
-                self.logger.warning(
-                    f"No data returned for {index_ric} at {target_date}.")
-                retry_count += 1
+                else:
+                    self.logger.warning(
+                        f"No data returned for {index_ric} at {target_date}."
+                        f" Sleeping for {self.general_error_delay} minutes."
+                    )
+                    self._apply_general_error_delay()
+                    retry_count += 1
 
             except ek.EikonError as err:
-                self.logger.error(
-                    f"Error downloading {index_ric} at {target_date}."
-                    f" Error code: {err.code}")
-
                 if err.code == -1:
                     self.logger.warning(
                         f"Skipping download of {index_ric} at {target_date}."
                     )
                     return self._empty_df_chain(index_ric), f"Error: {err.code}"
-
                 elif err.code == 401:
                     self.logger.warning(
                         f"Eikon Proxy not running or cannot be reached."
-                        f" Sleeping for {self.proxy_error_delay} minutes."
+                        f" Sleeping for {self.proxy_error_delay} hours."
                     )
                     self._apply_proxy_error_delay()
-
+                    retry_count += 1
                 elif err.code == 429:
                     self.logger.warning(
                         f"Request limit reached. Sleeping for"
-                        f" {self.request_limit_delay} seconds.")
+                        f" {self.request_limit_delay} hours.")
                     self._apply_request_limit_delay()
-
+                    retry_count += 1
+                elif err.code == 500:
+                    self.logger.warning(
+                        f"Network Error. Sleeping for"
+                        f" {self.network_error_delay} hours.")
+                    self._apply_network_error_delay()
+                    retry_count += 1
+                elif err.code == 2504:
+                    self.logger.warning(
+                        f"Gateway Time-out. Sleeping for"
+                        f" {self.network_error_delay} minutes.")
+                    self._apply_gateway_delay()
+                    retry_count += 1
+                else:
+                    self.logger.warning(
+                        f"Unhandled Eikon error code: {err.code}"
+                        f" Sleeping for {self.general_error_delay} minutes."
+                    )
+                    self._apply_general_error_delay()
+                    retry_count += 1
+            except Exception as e:
+                self.logger.error(
+                    f"Unexpected error for {index_ric}: {str(e)}"
+                    f" Sleeping for {self.general_error_delay} minutes."
+                )
+                self._apply_general_error_delay()
                 retry_count += 1
 
-            except Exception as e:
-                self.logger.error(f"Unexpected error for {index_ric}: {str(e)}")
-                return self._empty_df_chain(
-                    index_ric), f"Unexpected error: {str(e)}"
-
-        self.logger.error(
-            f"Failed to download {index_ric} "
-            f"at {target_date} after {max_retries} attempts.")
+        self.logger.critical(
+            f"Data retrieval for {index_ric} at {target_date}"
+            f" failed after {max_retries} retries."
+        )
         return self._empty_df_chain(index_ric), "Max retries exceeded."
 
     def get_etp_chain(
@@ -289,28 +345,20 @@ class EikonDownloader:
             pre_fix: Optional[str] = None,
     ) -> Union[Tuple[None, str], Tuple[pd.DataFrame, None]]:
         """
-        Download data for a given Exchange Traded Product (ETP) chain
-         at a specific target date. This method retrieves the data for an
-         ETP chain by calling the `get_index_chain` method internally, and
-         handles retries and error logging. It returns the ETP chain data
-         as a DataFrame if successful, or an error message if the download
-         fails after the specified retries.
+        Retrieves the ETP chain data for a given ETP RIC on
+         a specified target date.
 
-        :param etp_ric: The Reuters Instrument Code (RIC) for the ETP chain
-         to download data for. Must be a string.
-        :param target_date: The target date for which to retrieve data. Can be
-         a string (e.g., '2025-12-31') or a datetime object.
-        :param fields: The fields to retrieve for the ETP chain. Can be a
-         single field as a string or a list of fields.
-        :param parameters: Optional dictionary of additional parameters for
-         the request (default is None).
-        :param max_retries: The maximum number of retries to attempt in case
-         of failure. Default is 5.
-        :param pre_fix: Optional prefix to be added to the `etp_ric` before
-         making the request. Default is None.
-        :return: A tuple containing:
-         - A pandas DataFrame with the requested ETP chain data if successful.
-         - An error message (string) if an error occurs, otherwise None.
+        param: etp_ric; The RIC (Reuters Instrument Code) of the ETP; str
+        param: target_date; The date for which to retrieve the ETP chain data;
+         Union[str, datetime]
+        param: fields; The fields to retrieve; Union[str, List[str]]
+        param: parameters; Additional parameters to pass to the
+         data retrieval function; Optional[dict]; default: None
+        param: max_retries; Maximum number of retries in case
+         of failure; int; default: 5
+        param: pre_fix; Prefix to be used in logging; Optional[str]; default: None
+        :return: A tuple containing the ETP chain data as a pandas DataFrame
+         and an error message; Union[Tuple[None, str], Tuple[pd.DataFrame, None]]
         """
         self.logger.info(
             f"Attempting to download data for ETP chain"
@@ -328,7 +376,9 @@ class EikonDownloader:
         )
 
         # Handle errors gracefully
-        if err:
+        if (err or etp_chain_df is None
+                or not isinstance(etp_chain_df, pd.DataFrame)
+                or etp_chain_df.empty):
             self.logger.error(
                 f"Failed to download ETP chain data"
                 f" for {etp_ric} at {target_date}. Error: {err}"
@@ -355,42 +405,34 @@ class EikonDownloader:
             corax: str = 'adjusted',
             calendar: Optional[str] = None,
             count: Optional[int] = None,
-    ) -> Optional[pd.DataFrame]:
+    ) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
         """
-        Download index data for a given index within a specified date range and
-         merge multiple requests. This method retrieves historical index data
-         based on the specified start and end dates, and other optional
-         parameters like fields, interval, and calendar. It then merges the
-         data and returns it as a DataFrame. The method handles retries in case
-         of failures and logs the success or failure of each download attempt.
+        Retrieves the timeseries data for a given index RIC within
+         a specified date range.
 
-        :param index_ric: The Reuters Instrument Code (RIC) for the index to
-         download data for. Must be a string.
-        :param fields: The fields to retrieve for the index, default is 'CLOSE'.
-         Can be a single field as a string or a list of fields.
-        :param end_date: The reference date to end the data range. Can be a
-         string (e.g., '2025-12-31') or a datetime object.
-        :param num_years: The number of years to go back from the `end_date`
-         to generate past target dates.
-        :param start_date: The reference date to start the data range. Can be
-         a string (e.g., '2015-01-01') or a datetime object.
-        :param pre_fix: Optional prefix to be added to the `index_ric` before
-         making the request. Default is '.'.
-        :param max_retries: The maximum number of retries in case of failure.
-         Default is 5.
-        :param interval: The data interval to retrieve. Possible values:
-         'tick', 'minute', 'hour', 'daily', 'weekly', 'monthly', 'quarterly',
-          'yearly'.
-        :param corax: The adjustment type for data. Possible values:
-         'adjusted', 'unadjusted'.
-        :param calendar: The calendar type to use. Possible values: 'native',
-         'tradingdays', 'calendardays'.
-        :param count: The maximum number of data points to retrieve.
-
-        :return: A pandas DataFrame with the requested index data, or None
-         if no data is retrieved.
-        :raises TypeError: If `index_ric` is provided as a list rather than
-         a string.
+        param: index_ric; The RIC (Reuters Instrument Code) of the index; str
+        param: end_date; The end date for the timeseries data;
+         Union[str, datetime]
+        param: num_years; The number of years of data to retrieve;
+         Optional[int]; default: None
+        param: start_date; The start date for the timeseries data;
+         Optional[Union[str, datetime]]; default: None
+        param: pre_fix; Prefix to be added to the index RIC;
+         Union[str, None]; default: "."
+        param: max_retries; Maximum number of retries in case of failure;
+         int; default: 5
+        param: fields; The fields to retrieve; Union[str, List[str]];
+         default: 'CLOSE'
+        param: interval; The interval of the timeseries data
+         (e.g., 'daily', 'weekly'); str; default: "daily"
+        param: corax; The type of price adjustment ('adjusted', 'unadjusted');
+         str; default: 'adjusted'
+        param: calendar; The calendar to use for the timeseries data;
+         Optional[str]; default: None
+        param: count; The number of data points to retrieve; Optional[int];
+         default: None
+        :return: A tuple containing the timeseries data as a pandas DataFrame
+         and an error message; Tuple[Optional[pd.DataFrame], Optional[str]]
         """
         if isinstance(index_ric, list):
             raise TypeError("'index_ric' has to be of type 'str', not 'list'!")
@@ -398,13 +440,8 @@ class EikonDownloader:
         if isinstance(pre_fix, str) and isinstance(index_ric, str):
             index_ric = pre_fix + index_ric
 
-        self.logger.info(
-            f"Starting download for index {index_ric}"
-            f" from {start_date} to {end_date}."
-        )
-
         # Call get_stock_timeseries to fetch the data
-        index_timeseries_df = self.get_stock_timeseries(
+        index_timeseries_df, err = self.get_stock_timeseries(
             index_df=None,
             ric=index_ric,
             end_date=end_date,
@@ -419,23 +456,27 @@ class EikonDownloader:
         )
 
         # Check if data was retrieved successfully
-        if index_timeseries_df is None or index_timeseries_df.empty:
+        if (err or index_timeseries_df is None or
+                not isinstance(index_timeseries_df, pd.DataFrame)
+                or index_timeseries_df.empty):
             self.logger.warning(
                 f"No data retrieved for {index_ric}"
                 f" from {start_date} to {end_date}."
             )
-            return None
+            return None, err
 
         # Rename the 'CLOSE' column to match the index RIC
-        if 'CLOSE' in index_timeseries_df.columns:
-            index_timeseries_df.rename(
-                columns={'CLOSE': index_ric},
-                inplace=True
-            )
+        if isinstance(index_timeseries_df, pd.DataFrame):
+            df_columns = [
+                column.lower() for column in index_timeseries_df.columns
+            ]
+            if 'CLOSE'.lower() in df_columns:
+                self.logger.debug(f'Renaming column "CLOSE" to {index_ric}.')
+                index_timeseries_df.rename(
+                    columns={'CLOSE': index_ric}, inplace=True
+                )
 
-        self.logger.info(f"Successfully downloaded index data for {index_ric}.")
-
-        return index_timeseries_df
+        return index_timeseries_df, None
 
     def get_stock_timeseries(
             self,
@@ -450,41 +491,34 @@ class EikonDownloader:
             corax: str = 'adjusted',
             calendar: Optional[str] = None,
             count: Optional[int] = None
-    ) -> pd.DataFrame:
+    ) -> Tuple[pd.DataFrame, Optional[str]]:
         """
-        Download stock price data for a given symbol within a specified date
-         range and merge multiple requests. This method retrieves stock price
-         data for the given RIC (Reuters Instrument Code) over a series of
-         decades, handling retries and error logging. It returns a DataFrame
-         with the stock price data for the specified fields, interval, and
-         other parameters. If no data is retrieved, NaN values are appended for
-         the corresponding date range.
+        Retrieves the timeseries data for a given stock RIC within
+         a specified date range.
 
-        :param ric: The stock RIC to download data for. Must be a string.
-        :param fields: The fields to retrieve for the stock. Can be a single
-         field as a string or a list of fields.
-        :param end_date: The reference end date (format: 'YYYY-MM-DD') or a
-         datetime object.
-        :param index_df: An optional DataFrame to append the retrieved stock
-         data to (default is None).
-        :param num_years: The number of years to generate past target dates.
-         Optional.
-        :param start_date: The reference start date (format: 'YYYY-MM-DD') or
-         a datetime object. Optional.
-        :param max_retries: The maximum number of retries to attempt in case
-         of failure. Default is 5.
-        :param interval: The data interval to retrieve. Possible values:
-         'tick', 'minute', 'hour', 'daily', 'weekly', 'monthly', 'quarterly',
-          'yearly'. Default is 'daily'.
-        :param corax: The type of data adjustment. Possible values: 'adjusted',
-         'unadjusted'. Default is 'adjusted'.
-        :param calendar: The calendar type to use. Possible values: 'native',
-         'tradingdays', 'calendardays'. Optional.
-        :param count: The maximum number of data points to retrieve. Optional.
-
-        :return: A pandas DataFrame with the retrieved stock data merged with
-         the provided `index_df`, or a new DataFrame if `index_df` is None.
-        :raises TypeError: If `fields` is not a string or a list of strings.
+        param: ric; The RIC (Reuters Instrument Code) of the stock; str
+        param: end_date; The end date for the timeseries data;
+         Union[str, datetime]
+        param: index_df; An optional DataFrame to join the retrieved data with;
+         Optional[pd.DataFrame]; default: None
+        param: num_years; The number of years of data to retrieve;
+         Optional[int]; default: None
+        param: start_date; The start date for the timeseries data;
+         Optional[Union[str, datetime]]; default: None
+        param: max_retries; Maximum number of retries in case of failure;
+         int; default: 5
+        param: fields; The fields to retrieve; Union[str, List[str]];
+         default: 'CLOSE'
+        param: interval; The interval of the timeseries data
+         (e.g., 'daily', 'weekly'); str; default: "daily"
+        param: corax; The type of price adjustment ('adjusted', 'unadjusted');
+         str; default: 'adjusted'
+        param: calendar; The calendar to use for the timeseries data;
+         Optional[str]; default: None
+        param: count; The number of data points to retrieve; Optional[int];
+         default: None
+        :return: A tuple containing the timeseries data as a pandas DataFrame
+         and an error message; Tuple[pd.DataFrame, Optional[str]]
         """
         if isinstance(fields, str):
             fields = [fields]
@@ -499,10 +533,11 @@ class EikonDownloader:
         ric_timeseries_df_list = []  # List to store dataframes
 
         for start_date, end_date in zip(start_dates, end_dates):
-            retries = 0
+
+            retry_count = 0
             data_retrieved = False
 
-            while retries < max_retries:
+            while retry_count < max_retries:
                 try:
                     self._apply_request_delay()
                     self.logger.info(
@@ -523,57 +558,80 @@ class EikonDownloader:
                         debug=False
                     )
 
-                    if (ric_timeseries_df is not None
-                            and not ric_timeseries_df.empty):
-                        ric_timeseries_df.sort_index(ascending=False,
-                                                     inplace=True)
-                        """
-                        ric_timeseries_df.rename(columns={'CLOSE': ric},
-                                                 inplace=True)
-                        """
-                        ric_timeseries_df.columns = [ric]
-                        data_retrieved = True
-                        ric_timeseries_df_list.append(ric_timeseries_df)
-                        break  # Break out of retry loop if successful
-
+                    if isinstance(ric_timeseries_df, pd.DataFrame):
+                        if not ric_timeseries_df.empty:
+                            ric_timeseries_df.sort_index(
+                                ascending=False, inplace=True
+                            )
+                            ric_timeseries_df.columns = [ric]
+                            ric_timeseries_df_list.append(ric_timeseries_df)
+                            data_retrieved = True
+                            self.logger.info(
+                                f"Data retrieved for {ric}"
+                                f" from {start_date} to {end_date}."
+                            )
+                            break
+                        else:
+                            self.logger.warning(
+                                f"No data retrieved for {ric}"
+                                f" from {start_date} to {end_date}."
+                            )
                     else:
-                        data_retrieved = False
+                        self.logger.warning(
+                            f"Unexpected data type for {ric}"
+                            f" from {start_date} to {end_date}."
+                        )
+                    retry_count += 1
 
                 except ek.EikonError as err:
-                    self.logger.error(
-                        f"Error downloading {ric} from"
-                        f" {start_date} to {end_date}: {err.code}"
-                    )
-
-                    if err.code == -1:  # Critical error, cannot recover
+                    if err.code == -1:
                         self.logger.warning(
-                            f"Skipping {ric} due to critical error {err.code}.")
-                        break
-
-                    elif err.code == 429:  # Rate limit exceeded
-                        self.logger.warning(
-                            f"Rate limit hit. Sleeping for"
-                            f" {self.request_limit_delay} minutes."
+                            f"Skipping download of {ric} with fields: {fields}"
+                            f" from {start_date} to {end_date}"
+                            f" due to error {err.code}."
                         )
-                        self._apply_request_limit_delay()
-
+                        break
                     elif err.code == 401:
                         self.logger.warning(
                             f"Eikon Proxy not running or cannot be reached."
-                            f" Sleeping for {self.proxy_error_delay} minutes."
+                            f" Sleeping for {self.proxy_error_delay} hours."
                         )
                         self._apply_proxy_error_delay()
-
+                        retry_count += 1
+                    elif err.code == 429:
+                        self.logger.warning(
+                            f"Request limit reached. Sleeping for"
+                            f" {self.request_limit_delay} hours.")
+                        self._apply_request_limit_delay()
+                        retry_count += 1
+                    elif err.code == 500:
+                        self.logger.warning(
+                            f"Network Error. Sleeping for"
+                            f" {self.network_error_delay} hours.")
+                        self._apply_network_error_delay()
+                        retry_count += 1
+                    elif err.code == 2504:
+                        self.logger.warning(
+                            f"Gateway Time-out. Sleeping for"
+                            f" {self.network_error_delay} minutes.")
+                        self._apply_gateway_delay()
+                        retry_count += 1
                     else:
-                        self.logger.info(
-                            f"Retrying download ({retries + 1}/{max_retries})."
+                        self.logger.warning(
+                            f"Unhandled Eikon error code: {err.code}"
+                            f" Sleeping for {self.general_error_delay} minutes."
                         )
-                        self._apply_request_delay()
-                        retries += 1
-
+                        self._apply_general_error_delay()
+                        retry_count += 1
                 except Exception as e:
-                    self.logger.error(f"Unexpected error for {ric}: {str(e)}")
-                    return index_df
+                    self.logger.error(
+                        f"Unexpected error for {ric}"
+                        f" with fields: {fields}"
+                        f" from {start_date} to {end_date}: {str(e)}"
+                        f" Sleeping for {self.general_error_delay} minutes."
+                    )
+                    self._apply_general_error_delay()
+                    retry_count += 1
 
             # If no data was retrieved, append a NaN DataFrame
             if not data_retrieved:
@@ -582,11 +640,9 @@ class EikonDownloader:
                     f" from {start_date} to {end_date}, adding NaNs."
                 )
                 ric_timeseries_df = pd.DataFrame(
-                    index=index_df.index if index_df is not None
-                    else pd.date_range(
-                        start=start_date, end=end_date,
-                        freq='D'
-                    ),
+                    index=index_df.index
+                    if isinstance(index_df, pd.DataFrame) #and len(index_df.index) > 2
+                    else pd.date_range(start=start_date, end=end_date, freq='D'),
                     columns=[ric],
                     data=np.nan
                 )
@@ -601,13 +657,8 @@ class EikonDownloader:
                 ~merged_ric_timeseries_df.index.duplicated(keep='first')
             ]
 
-            # Prevent duplicate column names by adding prefix
-            """
-            merged_ric_timeseries_df = merged_ric_timeseries_df.add_prefix(
-                f"{ric}_")
-            """
             # Join merged data with index_df
-            if index_df is not None:
+            if isinstance(index_df, pd.DataFrame):
                 index_df = index_df.join(merged_ric_timeseries_df, how='outer')
             else:
                 index_df = merged_ric_timeseries_df.copy(deep=True)
@@ -617,9 +668,9 @@ class EikonDownloader:
             f" from {start_dates[-1]} to {end_dates[0]}."
         )
 
-        return index_df
+        return index_df, None
 
-    def get_additional_data(
+    def get_constituents_data(
             self,
             rics: Union[str, List[str]],
             fields: Union[str, List[str]],
@@ -627,40 +678,36 @@ class EikonDownloader:
             pre_fix: Optional[str] = None,
             parameters: Optional[dict] = None,
             max_retries: int = 5
-    ) -> Union[pd.DataFrame, Tuple[pd.DataFrame, str]]:
+    ) -> Tuple[pd.DataFrame, Optional[str]]:
         """
-        Downloads additional stock data for a given list of RICs and fields,
-         with support for retries and error handling. This method retrieves
-         extra data (such as ESG scores, market cap, etc.) for one or more
-         RICs (Reuters Instrument Codes) based on the specified fields.
-         It supports retries in case of errors and logs the process.
+        Retrieves the constituents data for given RICs
+         on a specified target date.
 
-        :param rics: The RIC(s) (string or list of strings) for which additional
-         stock data is to be retrieved.
-        :param fields: The fields (string or list of strings) to retrieve for
-         the given RIC(s).
-        :param target_date: The target date for the data in 'YYYY-MM-DD' format
-         or as a datetime object.
-        :param pre_fix: An optional prefix to be added to the RIC(s).
-        :param parameters: Optional global parameters to include in the request.
-        :param max_retries: The maximum number of retries in case of failure
-         (default is 5).
-
-        :return: A tuple with a DataFrame containing the downloaded data
-         (or an empty DataFrame) and an error message (if any). If no data is
-         available after retries, it returns an empty DataFrame with a
-         corresponding error message.
-        :raises: Returns a tuple of (empty DataFrame, error message) in case
-         of failure after maximum retries.
+        param: rics; The RICs (Reuters Instrument Codes) for which to
+         retrieve data; Union[str, List[str]]
+        param: fields; The fields to retrieve; Union[str, List[str]]
+        param: target_date; The date for which to retrieve the data;
+         Union[str, datetime]
+        param: pre_fix; Prefix to be added to each RIC; Optional[str];
+         default: None
+        param: parameters; Additional parameters to pass to the
+         data retrieval function; Optional[dict]; default: None
+        param: max_retries; Maximum number of retries in case of failure;
+         int; default: 5
+        :return: A tuple containing the constituents data as a pandas DataFrame
+         and an error message; Tuple[pd.DataFrame, Optional[str]]
         """
-        if isinstance(pre_fix, str) and isinstance(rics, str):
-            rics = pre_fix + rics
-
         if isinstance(rics, str):
             rics = [rics]
 
         if isinstance(fields, str):
             fields = [fields]
+
+        if isinstance(target_date, datetime):
+            target_date = target_date.strftime('%Y-%m-%d')
+
+        if isinstance(pre_fix, str):
+            rics = [pre_fix + ric for ric in rics]
 
         retry_count = 0
 
@@ -668,8 +715,8 @@ class EikonDownloader:
             try:
                 self._apply_request_delay()
                 self.logger.info(
-                    f"Downloading additional stock data"
-                    f" for {rics} with fields: {fields}."
+                    f"Downloading additional data for {rics}"
+                    f" with fields: {fields} at {target_date}."
                 )
 
                 meta_data_df, err = ek.get_data(
@@ -683,199 +730,358 @@ class EikonDownloader:
                     raw_output=False,
                     field_name=False
                 )
-                """
-                # Replace <NA> with np.nan
-                meta_data_df = meta_data_df.replace({pd.NA: np.nan})
 
-                cols_to_convert_to_float = [
-                    'ESG Score',
-                    'Environmental Pillar Score',
-                    'Social Pillar Score',
-                    'Governance Pillar Score',
-                    'Company Market Cap'
-                ]
-                cols_to_convert_to_string = [
-                    'Instrument',
-                    'TRBC Economic Sector Name',
-                    'TRBC Business Sector Name',
-                    'TRBC Industry Group Name',
-                    'TRBC Industry Name',
-                    'ISIN'
-                ]
-                meta_data_df[cols_to_convert_to_float] = meta_data_df[cols_to_convert_to_float].astype(float)
-                meta_data_df[cols_to_convert_to_string] = meta_data_df[cols_to_convert_to_string].astype('string')
-                """
-
-                if err:
-                    self.logger.error(
-                        f"Error downloading additional stock data: {err}")
-                    return self._empty_df_data(rics, fields), f"Error: {err}"
-
-                if (meta_data_df is not None
+                if (isinstance(meta_data_df, pd.DataFrame)
                         and not meta_data_df.empty
-                        and meta_data_df.shape[0] > 1):
+                        and meta_data_df.shape[0] > int(len(rics) * 0.1)):
                     self.logger.info(
-                        "Successfully downloaded additional stock data.")
+                        f"Successfully downloaded {rics} with fields: {fields}"
+                        f" at {target_date}."
+                    )
                     return meta_data_df, None
-
+                elif err:
+                    if (isinstance(err, list)
+                            and any(e['code'] == 412 for e in err)):
+                        for e in err:
+                            self.logger.warning(
+                                f"Unable to resolve all requested identifiers:"
+                                f" {e['message']}. Returning received data"
+                                f" of {rics} with fields: {fields} at {target_date}."
+                            )
+                        return meta_data_df, None
+                    else:
+                        self.logger.error(
+                            f"Error downloading {rics} with fields: {fields}"
+                            f" at {target_date}: {err}. Retrying..."
+                        )
+                        retry_count += 1
                 else:
-                    self.logger.warning(
-                        f"No additional stock data available for {rics}.")
+                    self.logger.error(
+                        f"No data received for {rics} with fields: {fields}"
+                        f" at {target_date}. Retrying..."
+                    )
                     retry_count += 1
-                    continue
 
             except ek.EikonError as err:
-                self.logger.error(
-                    f"Downloading additional stock data failed!"
-                    f" Error code: {err.code}"
-                )
-
                 if err.code == -1:
                     self.logger.warning(
-                        f"Skipping download of {rics} due to error {err.code}.")
-                    return self._empty_df_data(rics,
-                                               fields), f"Error: {err.code}"
-
+                        f"Skipping download of {rics} with fields: {fields}"
+                        f" at {target_date} due to error {err.code}."
+                    )
+                    return self._empty_df_data(rics, fields), f"Error: {err.code}"
                 elif err.code == 401:
                     self.logger.warning(
                         f"Eikon Proxy not running or cannot be reached."
-                        f" Sleeping for {self.proxy_error_delay} minutes."
+                        f" Sleeping for {self.proxy_error_delay} hours."
                     )
                     self._apply_proxy_error_delay()
-
+                    retry_count += 1
                 elif err.code == 429:
                     self.logger.warning(
-                        f"Rate limit hit. Sleeping"
-                        f" for {self.request_limit_delay} minutes."
-                    )
+                        f"Request limit reached. Sleeping for"
+                        f" {self.request_limit_delay} hours.")
                     self._apply_request_limit_delay()
-
+                    retry_count += 1
+                elif err.code == 500:
+                    self.logger.warning(
+                        f"Network Error. Sleeping for"
+                        f" {self.network_error_delay} hours.")
+                    self._apply_network_error_delay()
+                    retry_count += 1
+                elif err.code == 2504:
+                    self.logger.warning(
+                        f"Gateway Time-out. Sleeping for"
+                        f" {self.network_error_delay} minutes.")
+                    self._apply_gateway_delay()
+                    retry_count += 1
                 else:
-                    self.logger.info(
-                        f"Retrying download ({retry_count + 1}/{max_retries})."
+                    self.logger.warning(
+                        f"Unhandled Eikon error code: {err.code}"
+                        f" Sleeping for {self.general_error_delay} minutes."
                     )
-                    self._apply_request_delay()
-
-                retry_count += 1
-
+                    self._apply_general_error_delay()
+                    retry_count += 1
             except Exception as e:
                 self.logger.error(
-                    f"Unexpected error while downloading additional"
-                    f" stock data: {str(e)}"
+                    f"Unexpected error for {rics}"
+                    f" with fields: {fields} at {target_date}: {str(e)}"
+                    f" Sleeping for {self.general_error_delay} minutes."
                 )
-                return (self._empty_df_data(rics, fields),
-                        f"Unexpected error: {str(e)}")
+                self._apply_general_error_delay()
+                retry_count += 1
 
-        self.logger.error(
-            f"Failed to download additional stock data"
-            f" for {rics} after {max_retries} attempts."
+        self.logger.critical(
+            f"Data retrieval  for {rics} with fields: {fields} at {target_date}"
+            f" failed after {max_retries} retries."
         )
         return self._empty_df_data(rics, fields), "Max retries exceeded."
+
+    def get_index_data(
+            self,
+            ric: str,
+            fields: Union[str, List[str]],
+            target_date: Union[str, datetime],
+            pre_fix: Optional[str] = None,
+            parameters: Optional[dict] = None,
+            max_retries: int = 5,
+            nan_ratio: float = 0.25
+    ) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+        """
+        Retrieves the index data for a given RIC on a specified target date.
+
+        param: ric; The RIC (Reuters Instrument Code) of the index; str
+        param: fields; The fields to retrieve; Union[str, List[str]]
+        param: target_date; The date for which to retrieve the data;
+         Union[str, datetime]
+        param: pre_fix; Prefix to be added to the RIC; Optional[str];
+         default: None
+        param: parameters; Additional parameters to pass to the data retrieval
+         function; Optional[dict]; default: None
+        param: max_retries; Maximum number of retries in case of failure;
+         int; default: 5
+        param: nan_ratio; The maximum allowed ratio of NaN values in the data;
+         float; default: 0.25
+        :return: A tuple containing the index data as a pandas DataFrame and
+         an error message; Tuple[Optional[pd.DataFrame], Optional[str]]
+        """
+        if not isinstance(ric, str):
+            raise TypeError("'ric' must be of type 'str'!")
+
+        try:
+            index_stats_df, err = self.get_constituents_data(
+                rics=ric,
+                fields=fields,
+                target_date=target_date,
+                pre_fix=pre_fix,
+                parameters=parameters,
+                max_retries=max_retries
+            )
+        except Exception as e:
+            err = str(e)
+            index_stats_df = None
+
+        if (isinstance(index_stats_df, pd.DataFrame)
+                and not index_stats_df.empty):
+            nan_ratio_index_stats_df = index_stats_df.isnull().mean()
+            has_high_nan_ratio = (nan_ratio_index_stats_df >= nan_ratio).any()
+        else:
+            has_high_nan_ratio = True
+
+        if (err or not isinstance(index_stats_df, pd.DataFrame)
+                or has_high_nan_ratio or index_stats_df.empty):
+            self.logger.error(
+                f"Finally failed to download additional data"
+                f" for {ric} with fields {fields} at {target_date}."
+                f" Error: {err}"
+            )
+            return None, err
+
+        else:
+            self.logger.info(
+                f"Successfully downloaded additional data"
+                f" for {ric} with fields {fields} at {target_date}."
+            )
+            return index_stats_df, None
 
     @staticmethod
     def _empty_df_chain(
             ric: str
     ) -> pd.DataFrame:
         """
-        Creates an empty DataFrame with a single column corresponding to the
-         given RIC, filled with NaN values.
+        Creates an empty DataFrame with a single column named after the
+         given RIC and a single NaN value.
 
-        :param ric: The RIC (Reuters Instrument Code) to be used as the
-         column name for the DataFrame.
-
-        :return: An empty DataFrame with a column named after the provided
-         RIC and a row of NaN values.
+        param: ric; The RIC (Reuters Instrument Code) to be used
+         as the column name; str
+        :return: A pandas DataFrame with one column named after
+         the RIC and one NaN value; pd.DataFrame
+        :raises ValueError: If the RIC is None or an empty string.
+        :raises TypeError: If the RIC is not a string.
         """
-        return pd.DataFrame(columns=[ric], data=[np.nan])
+        try:
+            if ric is None:
+                raise ValueError("RIC cannot be None.")
+            if not isinstance(ric, str):
+                raise TypeError(
+                    f"RIC must be a string, got {type(ric).__name__}.")
+            if ric == "":
+                raise ValueError("RIC cannot be an empty string.")
 
+            return pd.DataFrame(columns=[ric], data=[[np.nan]])
+        except Exception as e:
+            logging.error(f"An unexpected error occurred: {e}")
+            raise
+
+    @staticmethod
     def _empty_df_data(
-            self,
-            rics: List[str],
-            fields: List[str]
+            rics: Union[str, List[str]],
+            fields: Union[str, List[str]]
     ) -> pd.DataFrame:
         """
-        Creates an empty DataFrame with NaN values for the specified RICs and fields.
+        Creates an empty DataFrame with RICs as the index and fields
+        as columns, filled with NaN values.
 
-        :param rics: A list of RICs (Reuters Instrument Codes) to be used as
-         columns in the DataFrame.
-        :param fields: A list of fields to be used as columns in the DataFrame,
-         alongside the RICs.
-
-        :return: An empty DataFrame with columns for the RICs and fields,
-         and a single row filled with NaN values.
+        param: rics; The RICs (Reuters Instrument Codes) to be used
+         as the index; Union[str, List[str]]
+        param: fields; The fields to be used as the columns; Union[str, List[str]]
+        :return: A pandas DataFrame with RICs as the index and fields
+         as columns, filled with NaN values; pd.DataFrame
+        :raises ValueError: If RICs or fields are an empty list or string.
+        :raises TypeError: If RICs or fields are not a list or string.
         """
-        return pd.DataFrame(
-            columns=["RIC"] + fields,
-            data=[[np.nan] * (len(fields) + 1)])
+        try:
+            # Convert rics to a list if it's a string
+            if isinstance(rics, str):
+                rics = [rics]
+            elif not isinstance(rics, list):
+                raise TypeError(
+                    f"RICs must be a list or a string,"
+                    f" got {type(rics).__name__}."
+                )
+            if len(rics) == 0:
+                raise ValueError("RICs cannot be an empty list or string.")
+
+            # Convert fields to a list if it's a string
+            if isinstance(fields, str):
+                fields = [fields]
+            elif not isinstance(fields, list):
+                raise TypeError(
+                    f"Fields must be a list or a string,"
+                    f" got {type(fields).__name__}."
+                )
+            if len(fields) == 0:
+                raise ValueError("Fields cannot be an empty list or string.")
+
+            # Create a DataFrame with RICs as the index and fields as columns
+            index = pd.Index(rics)
+            columns = fields
+            data = np.full((len(rics), len(fields)), np.nan)
+
+            return pd.DataFrame(data, index=index, columns=columns)
+        except Exception as e:
+            logging.error(f"An unexpected error occurred: {e}")
+            raise
 
     def _apply_request_delay(self) -> None:
         """
-        Applies a delay between requests if the delay time is specified
-         and greater than zero.
+        Applies a delay to the request by sleeping
+         for a specified number of seconds.
 
         :return: None
         """
-        if isinstance(self.request_delay,
-                      (int, float)) and self.request_delay > 0:
+        if (isinstance(self.request_delay, (int, float))
+                and self.request_delay > 0):
+            logging.debug(
+                f"Applying request delay of {self.request_delay} seconds."
+            )
             time.sleep(self.request_delay)
+
+    def _apply_general_error_delay(self) -> None:
+        """
+        Applies a delay due to general errors by
+         sleeping for a specified number of minutes.
+
+        :return: None
+        """
+        if (isinstance(self.general_error_delay, (int, float))
+                and self.general_error_delay > 0):
+            logging.debug(
+                f"Applying error delay of {self.general_error_delay} minutes."
+            )
+            time.sleep(self.general_error_delay * 60)
+
+    def _apply_gateway_delay(self) -> None:
+        """
+        Applies a delay due to Gateway Time-out errors by
+         sleeping for a specified number of minutes.
+
+        :return: None
+        """
+        if (isinstance(self.gateway_delay, (int, float))
+                and self.gateway_delay > 0):
+            logging.debug(
+                f"Applying error delay of {self.gateway_delay} minutes."
+            )
+            time.sleep(self.gateway_delay * 60)
 
     def _apply_request_limit_delay(self) -> None:
         """
-        Applies a delay when the request limit is reached, based on
-         the specified delay time.
+        Applies a delay due to request limits by sleeping
+         for a specified number of hours.
 
         :return: None
         """
-        if isinstance(self.request_limit_delay,
-                      (int, float)) and self.request_limit_delay > 0:
-            time.sleep(self.request_limit_delay)
+        if (isinstance(self.request_limit_delay, (int, float))
+                and self.request_limit_delay > 0):
+            logging.debug(
+                f"Applying request limit delay"
+                f" of {self.request_limit_delay} hours."
+            )
+            time.sleep(self.request_limit_delay * 3600)
 
     def _apply_proxy_error_delay(self) -> None:
         """
-        Applies a delay when the proxy is not running or can't be reached,
-         based on the specified delay time.
+        Applies a delay due to proxy errors by sleeping
+         for a specified number of hours.
 
         :return: None
         """
-        if isinstance(self.proxy_error_delay,
-                      (int, float)) and self.proxy_error_delay > 0:
-            time.sleep(self.proxy_error_delay)
+        if (isinstance(self.proxy_error_delay, (int, float))
+                and self.proxy_error_delay > 0):
+            logging.debug(
+                f"Applying proxy error delay"
+                f" of {self.proxy_error_delay} hours."
+            )
+            time.sleep(self.proxy_error_delay * 3600)
+
+    def _apply_network_error_delay(self) -> None:
+        """
+        Applies a delay due to networks errors by sleeping
+         for a specified number of hours.
+
+        :return: None
+        """
+        if (isinstance(self.network_error_delay, (int, float))
+                and self.network_error_delay > 0):
+            logging.debug(
+                f"Applying proxy error delay"
+                f" of {self.network_error_delay} hours."
+            )
+            time.sleep(self.network_error_delay * 3600)
 
     @staticmethod
     def _unpack_tuple(
             object_: Union[tuple, pd.DataFrame]
     ) -> pd.DataFrame:
         """
-        Unpacks a tuple returned by `ek.get_data` to extract the DataFrame.
+        Unpacks a tuple to extract the first element if it is a pandas
+         DataFrame, or returns the DataFrame directly if the input is a DataFrame.
 
-        This static method checks if the input is a tuple. If it is, it
-         attempts to extract the first element and verifies it is a pandas
-         DataFrame. If the input is already a DataFrame, it is returned
-         directly. If the input doesn't match the expected types, an appropriate
-         error is raised.
-
-        :param object_: The input object, which can either be a tuple
-         or a DataFrame.
-
-        :return: The extracted DataFrame if the input is a tuple containing
-         one, or the DataFrame itself if the input is already a DataFrame.
-
-        :raises ValueError: If the tuple is empty.
-        :raises TypeError: If the first element of the tuple is not a DataFrame,
+        param: object_; The input object to unpack; Union[tuple, pd.DataFrame]
+        :return: A pandas DataFrame extracted from the tuple
+         or the input DataFrame; pd.DataFrame
+        :raises ValueError: If the input tuple is empty.
+        :raises TypeError: If the first element of the tuple is not a DataFrame
          or if the input is neither a tuple nor a DataFrame.
         """
-        if isinstance(object_, tuple):
-            if len(object_) == 0:
-                raise ValueError("Received an empty tuple. Cannot unpack.")
-            if not isinstance(object_[0], pd.DataFrame):
+        try:
+            if isinstance(object_, tuple):
+                if len(object_) == 0:
+                    raise ValueError("Received an empty tuple. Cannot unpack.")
+                if not isinstance(object_[0], pd.DataFrame):
+                    raise TypeError(
+                        "Expected a DataFrame as the first tuple element."
+                    )
+                return object_[0]
+            elif isinstance(object_, pd.DataFrame):
+                return object_
+            else:
                 raise TypeError(
-                    "Expected a DataFrame as the first tuple element.")
-            return object_[0]
-        elif isinstance(object_, pd.DataFrame):
-            return object_
-        else:
-            raise TypeError(
-                f"Expected tuple or DataFrame, got {type(object_).__name__}")
+                    f"Expected tuple or DataFrame, got {type(object_).__name__}"
+                )
+        except Exception as e:
+            logging.error(f"An unexpected error occurred: {e}")
+            raise
 
 
 class OSDownloader:
@@ -1012,7 +1218,8 @@ class OSDownloader:
             if os.path.exists(local_file_path) and self._verify_file_integrity(
                     bucket_name, local_file_path, remote_path):
                 self.logger.info(
-                    f"Skipping already downloaded file: {remote_path}")
+                    f"Skipping already downloaded file: {remote_path}"
+                )
                 continue
 
             files_to_download.append((local_file_path, remote_path))
@@ -1082,8 +1289,9 @@ class OSDownloader:
             self.client.fget_object(bucket_name, remote_path, local_file_path)
 
             # Verify integrity after download
-            return self._verify_file_integrity(bucket_name, local_file_path,
-                                               remote_path)
+            return self._verify_file_integrity(
+                bucket_name, local_file_path, remote_path
+            )
 
         except S3Error as e:
             self.logger.error(
