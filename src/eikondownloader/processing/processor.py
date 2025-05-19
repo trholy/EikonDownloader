@@ -111,41 +111,50 @@ class DataProcessor:
             sep: str = ","
     ) -> np.ndarray:
         """
-        Extract and return unique RICs from a list of CSV files.
+        Extracts and returns a sorted array of unique RICs from
+         a list of CSV files.
 
-        This method reads the provided CSV files, extracts the RICs based on
-         the mode (either 'index' or 'etp'),  and returns a sorted array of
-         unique RICs. It also logs information about the number of RICs
-         processed from each file, and in case of errors, it logs them as well.
-         If no valid RICs are found, an empty list is returned.
-
-        :param files: List of CSV file paths.
-        :param sep: Separator for columns (default is ",").
-
-        :return: Sorted unique RICs as a NumPy array.
-
-        :raises: None
+        param: files; A list of file paths to the CSV files containing RICs.
+         (list)
+        param: sep; The delimiter to use when reading the CSV files.
+         Default is ",". (str)
+        :return: A sorted NumPy array of unique RICs extracted from
+         the provided CSV files. (np.ndarray)
         """
         if not files:
             self.logger.warning("No CSV files provided. Returning empty list.")
             return np.array([])
 
-        column_name = self.column_mapping[self.mode]
+        try:
+            column_name = self.column_mapping[self.mode]
+        except KeyError:
+            self.logger.error(f"Mode '{self.mode}' not found in column_mapping.")
+            raise KeyError(f"Mode '{self.mode}' not found in column_mapping.")
 
         rics_list, shapes = [], []
 
         for file in files:
             try:
                 df_temp = pd.read_csv(file, sep=sep, usecols=[column_name])
-                rics_list.append(df_temp[column_name].dropna().astype(str))
+                rics = df_temp[column_name].dropna().astype(str)
+                rics_list.append(rics)
                 shapes.append(df_temp.shape[0])
 
                 self.logger.info(
                     f"Processed file: {file} | Shape: {df_temp.shape}"
                 )
 
+            except FileNotFoundError as fnf_e:
+                self.logger.error(f"FileNotFoundError: {fnf_e}")
+                continue
+            except KeyError as key_e:
+                self.logger.error(f"KeyError: {key_e} in file {file}")
+                continue
+            except pd.errors.EmptyDataError as empty_e:
+                self.logger.error(f"EmptyDataError: {empty_e} in file {file}")
+                continue
             except Exception as e:
-                self.logger.error(f"Error reading file {file}: {e}")
+                self.logger.error(f"Unexpected error reading file {file}: {e}")
                 continue
 
         if not rics_list:
@@ -153,7 +162,7 @@ class DataProcessor:
             return np.array([])
 
         # Concatenate lists efficiently
-        all_rics = pd.concat(rics_list, axis=0).unique()
+        all_rics = pd.concat(rics_list, ignore_index=True).unique()
         sorted_rics = np.sort(all_rics)
 
         self.logger.info(
