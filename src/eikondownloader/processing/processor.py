@@ -43,22 +43,25 @@ class DataProcessor:
             self
     ) -> list:
         """
-        Retrieve all CSV files from the respective directory based on
-         the processing mode.
+        Retrieves a sorted list of CSV files from the directory
+         corresponding to the specified mode.
 
-        This method constructs a search path using the provided `path` and
-         `mode`, looks for CSV files in that directory, and returns a sorted
-          list of their paths. If no CSV files are found, a warning is logged
-           and a `FileNotFoundError` is raised.
-
-        :return: Sorted list of CSV file paths.
-
-        :raises FileNotFoundError: If no CSV files are found in the directory.
+        :return: A sorted list of CSV file paths found in the directory
+         corresponding to the specified mode. (list)
         """
-        mode_dir = self.mode_mapping[self.mode]
-        search_path = os.path.join(self.path, mode_dir, "*.csv")
-        files = sorted(glob.glob(search_path))
-        files = [os.path.normpath(file) for file in files]
+        try:
+            mode_dir = self.mode_mapping[self.mode]
+        except KeyError:
+            self.logger.error(f"Mode '{self.mode}' not found in mode_mapping.")
+            raise KeyError(f"Mode '{self.mode}' not found in mode_mapping.")
+
+        try:
+            search_path = os.path.join(self.path, mode_dir, "*.csv")
+            files = sorted(glob.glob(search_path))
+            files = [os.path.normpath(file) for file in files]
+        except OSError as e:
+            self.logger.error(f"OS error occurred: {e}")
+            raise OSError(f"OS error occurred: {e}")
 
         if not files:
             self.logger.warning(
