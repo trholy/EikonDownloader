@@ -76,31 +76,42 @@ class DataProcessor:
             search_hidden: bool = False
     ) -> list:
         """
-        Retrieve all index names from the directory.
+        Retrieves a sorted list of index names from the specified directory.
 
-        This method constructs a search path using the provided `path` and a
-         flag (`search_hidden`) to determine whether to include hidden
-         directories. It returns a sorted list of index names (i.e.,
-         folder names) from the directory. If no index names are found, a
-         warning is logged.
-
-        :param search_hidden: Whether to include hidden directories
-         (default is False).
-
-        :return: Sorted list of index names (folder names).
-
-        :raises: None
+        param: search_hidden; If True, includes hidden directories in the
+         search. Default is False. (bool)
+        :return: A sorted list of index names found in the specified directory.
+         (list)
         """
-        search_path = os.path.join(self.path, ".*" if search_hidden else "*")
-        index_names = sorted(
-            [os.path.basename(folder) for folder in glob.glob(search_path)
-             if os.path.isdir(folder)]
-        )
+        try:
+            # Check if the provided path is a valid directory
+            if not os.path.isdir(self.path):
+                raise FileNotFoundError(
+                    f"The provided path '{self.path}' is not a valid directory."
+                )
+
+            # Construct the search path
+            if search_hidden:
+                search_path = os.path.join(self.path, ".*")
+            else:
+                search_path = os.path.join(self.path, "*")
+
+            # Get list of directories
+            index_names = sorted(
+                [os.path.basename(folder) for folder in glob.glob(search_path + os.sep)
+                 if os.path.isdir(folder)]
+            )
+
+        except FileNotFoundError as fnf_e:
+            self.logger.error(f"FileNotFoundError: {fnf_e}")
+            raise
+        except OSError as os_e:
+            self.logger.error(f"OSError: {os_e}")
+            raise
 
         if not index_names:
             self.logger.warning(
-                f"No index names found in {search_path}."
-                f" Check your directory."
+                f"No index names found in {search_path}. Check your directory."
             )
 
         return index_names
