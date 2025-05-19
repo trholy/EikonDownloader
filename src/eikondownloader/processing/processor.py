@@ -190,15 +190,22 @@ class DataProcessor:
             chunk_size: int = 2000
     ) -> list:
         """
-        Splits the input list or NumPy array into smaller chunks of a
-         specified size.
+        Splits a list or a NumPy array into smaller chunks of a specified size.
 
-        :param lst: The input list or NumPy array to be split.
+        :param lst: The list or NumPy array to be split.
+        :type lst: Union[List, np.ndarray]
         :param chunk_size: The size of each chunk. Default is 2000.
-
-        :return: A list containing the chunks.
+        :type chunk_size: int
+        :return: A list of chunks, where each chunk is a sublist or subarray of the original input.
+        :rtype: List[List]
         """
-        if isinstance(lst, np.ndarray):
-            lst = list(lst)
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be greater than zero.")
 
-        return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
+        if not isinstance(lst, (list, np.ndarray)):
+            raise TypeError("Input must be a list or a NumPy array.")
+
+        if isinstance(lst, np.ndarray):
+            return [lst[i:i + chunk_size].tolist() for i in range(0, len(lst), chunk_size)]
+        else:
+            return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
