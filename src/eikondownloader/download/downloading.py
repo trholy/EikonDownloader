@@ -323,7 +323,7 @@ class EikonDownloader:
                     retry_count += 1
             except Exception as e:
                 self.logger.error(
-                    f"Unexpected error for {index_ric}: {str(e)}"
+                    f"Unexpected error for {index_ric}: {e!s}"
                     f" Sleeping for {self.general_error_delay} minutes."
                 )
                 self._apply_general_error_delay()
@@ -627,7 +627,7 @@ class EikonDownloader:
                     self.logger.error(
                         f"Unexpected error for {ric}"
                         f" with fields: {fields}"
-                        f" from {start_date} to {end_date}: {str(e)}"
+                        f" from {start_date} to {end_date}: {e!s}"
                         f" Sleeping for {self.general_error_delay} minutes."
                     )
                     self._apply_general_error_delay()
@@ -804,7 +804,7 @@ class EikonDownloader:
             except Exception as e:
                 self.logger.error(
                     f"Unexpected error for {rics}"
-                    f" with fields: {fields} at {target_date}: {str(e)}"
+                    f" with fields: {fields} at {target_date}: {e!s}"
                     f" Sleeping for {self.general_error_delay} minutes."
                 )
                 self._apply_general_error_delay()
