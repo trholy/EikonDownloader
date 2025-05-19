@@ -6,9 +6,9 @@ nav:
   - Home: README.md
   - Downloader Module:
       - DWDDownloader: download/EikonDownloader.md
-      - MinioDownloader: download/OSDownloader.md
+      - OSDownloader: download/OSDownloader.md
   - Uploader Module:
-      - MinioUploader: upload/OSUploader.md
+      - OSUploader: upload/OSUploader.md
   - Processing Module:
       - DataProcessor: processing/DataProcessor.md
 
