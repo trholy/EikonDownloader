@@ -21,20 +21,11 @@ class DataProcessor:
             mode: str = "index"
     ):
         """
-        Initialize EikonProcessor with a base path and mode.
+        Initializes the DataProcessor with a specified path and mode.
 
-        This constructor sets the base directory (`path`) where the data will
-         be stored and specifies the processing mode (`mode`), which determines
-         the type of data being processed (either 'index' or 'etp').
-         It also validates that the mode is either 'index' or 'etp', and maps
-         the mode to the appropriate processing function and column.
-
-        :param path: Base directory for data storage.
-        :param mode: Processing mode, either 'index' or 'etp'.
-
-        :raises ValueError: If the provided mode is neither 'index' nor 'etp'.
-
-        :return: None
+        param: path; The directory path where the data files are located. (str)
+        param: mode; The mode of operation, either 'index' or 'etp'.
+         Default is 'index'. (str)
         """
         self.path = path
         self.mode = mode.lower()
