@@ -914,24 +914,53 @@ class EikonDownloader:
 
     @staticmethod
     def _empty_df_data(
-            self,
-            rics: List[str],
-            fields: List[str]
+            rics: Union[str, List[str]],
+            fields: Union[str, List[str]]
     ) -> pd.DataFrame:
         """
-        Creates an empty DataFrame with NaN values for the specified RICs and fields.
+        Creates an empty DataFrame with RICs as the index and fields
+        as columns, filled with NaN values.
 
-        :param rics: A list of RICs (Reuters Instrument Codes) to be used as
-         columns in the DataFrame.
-        :param fields: A list of fields to be used as columns in the DataFrame,
-         alongside the RICs.
-
-        :return: An empty DataFrame with columns for the RICs and fields,
-         and a single row filled with NaN values.
+        param: rics; The RICs (Reuters Instrument Codes) to be used
+         as the index; Union[str, List[str]]
+        param: fields; The fields to be used as the columns; Union[str, List[str]]
+        :return: A pandas DataFrame with RICs as the index and fields
+         as columns, filled with NaN values; pd.DataFrame
+        :raises ValueError: If RICs or fields are an empty list or string.
+        :raises TypeError: If RICs or fields are not a list or string.
         """
-        return pd.DataFrame(
-            columns=["RIC"] + fields,
-            data=[[np.nan] * (len(fields) + 1)])
+        try:
+            # Convert rics to a list if it's a string
+            if isinstance(rics, str):
+                rics = [rics]
+            elif not isinstance(rics, list):
+                raise TypeError(
+                    f"RICs must be a list or a string,"
+                    f" got {type(rics).__name__}."
+                )
+            if len(rics) == 0:
+                raise ValueError("RICs cannot be an empty list or string.")
+
+            # Convert fields to a list if it's a string
+            if isinstance(fields, str):
+                fields = [fields]
+            elif not isinstance(fields, list):
+                raise TypeError(
+                    f"Fields must be a list or a string,"
+                    f" got {type(fields).__name__}."
+                )
+            if len(fields) == 0:
+                raise ValueError("Fields cannot be an empty list or string.")
+
+            # Create a DataFrame with RICs as the index and fields as columns
+            index = pd.Index(rics)
+            columns = fields
+            data = np.full((len(rics), len(fields)), np.nan)
+
+            return pd.DataFrame(data, index=index, columns=columns)
+        except Exception as e:
+            logging.error(f"An unexpected error occurred: {e}")
+            raise
 
     def _apply_request_delay(self) -> None:
         """
