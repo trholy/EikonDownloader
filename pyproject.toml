@@ -20,7 +20,7 @@ keywords = [
     "Company data",
     "trading",
 ]
-license = { text = "CC BY 4.0" }
+license = { text = "MIT" }
 classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",

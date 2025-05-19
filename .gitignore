@@ -50,3 +50,7 @@ coverage.xml
 *.bak
 .DS_Store
 Thumbs.db
+
+# Misc
+*temp*
+!THIRD_PARTY_LICENSES.txt

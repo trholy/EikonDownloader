@@ -13,6 +13,7 @@ pages:
     - mkdir -p docs/processing
     - mkdir -p docs/upload
     # Copy all Markdown files and images into the docs directory
+    - cp -r LICENSE docs/
     - cp -r documentation/download/. docs/download
     - cp -r documentation/processing/. docs/processing
     - cp -r documentation/upload/. docs/upload

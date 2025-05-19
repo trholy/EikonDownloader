@@ -182,7 +182,7 @@ eikondownloader/
 
 ## License
 
-This project is licensed under the **Creative Commons Attribution 4.0 International License (CC BY 4.0)**. You are free to share, adapt, and build upon the material, even for commercial purposes, as long as you provide appropriate credit. For more details, visit [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
 
 ## Attribution
 

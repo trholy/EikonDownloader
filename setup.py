@@ -11,6 +11,7 @@ setup(
     url="https://github.com/trholy/eikondownloader",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
+    license_files=('LICENSE',),
     classifiers=[
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
@@ -18,7 +19,7 @@ setup(
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
-        "License :: CC0 1.0 Universal (CC0 1.0) Public Domain Dedication",
+        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
     python_requires=">=3.8",
