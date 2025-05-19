@@ -14,13 +14,6 @@ import os
 import re
 
 
-# Configure logging to remove the default prefix
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(message)s',
-)
-
-
 class EikonDownloader:
     def __init__(
             self,
@@ -58,9 +51,23 @@ class EikonDownloader:
         self.network_error_delay = network_error_delay
         self.gateway_delay = gateway_delay
 
-        if api_key:
-            ek.set_app_key(api_key)
+        # Create formatters: simpler for console, detailed for file
+        console_formatter = logging.Formatter('%(levelname)s: %(message)s')
+        file_formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
 
+        # Set up console handler and assign the console formatter
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(console_formatter)
+
+        # Set up file handler and assign the file formatter
+        file_handler = logging.FileHandler(
+            f"{EikonDownloader.__name__}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        )
+        file_handler.setFormatter(file_formatter)
+
+        # Create a logger and set its level to INFO
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.INFO)
 
