@@ -1,17 +1,17 @@
-import pandas as pd
-import numpy as np
-import eikon as ek
-from minio import Minio
-from minio.error import S3Error
-
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Optional, Tuple, Union
-from datetime import datetime, timedelta
 import hashlib
 import logging
-import time
 import os
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta
+from typing import Optional, Union
+
+import eikon as ek
+import numpy as np
+import pandas as pd
+from minio import Minio
+from minio.error import S3Error
 
 
 class EikonDownloader:
@@ -88,7 +88,7 @@ class EikonDownloader:
             num_years: int,
             frequency: str,
             reverse: bool = True
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Generates a list of target dates based on the specified end date,
          number of years, and frequency.
@@ -149,7 +149,7 @@ class EikonDownloader:
             end_date: Union[str, datetime, np.datetime64],
             num_years: Optional[int] = None,
             start_date: Optional[Union[str, datetime, np.datetime64]] = None
-    ) -> Tuple[List[str], List[str]]:
+    ) -> tuple[list[str], list[str]]:
         """
         Generates lists of start and end dates for each decade within the
          specified range.
@@ -217,11 +217,11 @@ class EikonDownloader:
             self,
             index_ric: str,
             target_date: Union[str, datetime],
-            fields: Union[str, List[str]],
+            fields: Union[str, list[str]],
             parameters: Optional[dict] = None,
             max_retries: int = 5,
             pre_fix: Optional[str] = "0#."
-    ) -> Tuple[pd.DataFrame, Optional[str]]:
+    ) -> tuple[pd.DataFrame, Optional[str]]:
         """
         Retrieves the index chain data for a specified index RIC at a given
          target date.
@@ -339,11 +339,11 @@ class EikonDownloader:
             self,
             etp_ric: str,
             target_date: Union[str, datetime],
-            fields: Union[str, List[str]],
+            fields: Union[str, list[str]],
             parameters: Optional[dict] = None,
             max_retries: int = 5,
             pre_fix: Optional[str] = None,
-    ) -> Union[Tuple[None, str], Tuple[pd.DataFrame, None]]:
+    ) -> Union[tuple[None, str], tuple[pd.DataFrame, None]]:
         """
         Retrieves the ETP chain data for a given ETP RIC on
          a specified target date.
@@ -400,12 +400,12 @@ class EikonDownloader:
             start_date: Optional[Union[str, datetime]],
             pre_fix: Union[str, None] = ".",
             max_retries: int = 5,
-            fields: Union[str, List[str]] = 'CLOSE',
+            fields: Union[str, list[str]] = 'CLOSE',
             interval: str = "daily",
             corax: str = 'adjusted',
             calendar: Optional[str] = None,
             count: Optional[int] = None,
-    ) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    ) -> tuple[Optional[pd.DataFrame], Optional[str]]:
         """
         Retrieves the timeseries data for a given index RIC within
          a specified date range.
@@ -486,12 +486,12 @@ class EikonDownloader:
             num_years: Optional[int] = None,
             start_date: Optional[Union[str, datetime]] = None,
             max_retries: int = 5,
-            fields: Union[str, List[str]] = 'CLOSE',
+            fields: Union[str, list[str]] = 'CLOSE',
             interval: str = "daily",
             corax: str = 'adjusted',
             calendar: Optional[str] = None,
             count: Optional[int] = None
-    ) -> Tuple[pd.DataFrame, Optional[str]]:
+    ) -> tuple[pd.DataFrame, Optional[str]]:
         """
         Retrieves the timeseries data for a given stock RIC within
          a specified date range.
@@ -672,13 +672,13 @@ class EikonDownloader:
 
     def get_constituents_data(
             self,
-            rics: Union[str, List[str]],
-            fields: Union[str, List[str]],
+            rics: Union[str, list[str]],
+            fields: Union[str, list[str]],
             target_date: Union[str, datetime],
             pre_fix: Optional[str] = None,
             parameters: Optional[dict] = None,
             max_retries: int = 5
-    ) -> Tuple[pd.DataFrame, Optional[str]]:
+    ) -> tuple[pd.DataFrame, Optional[str]]:
         """
         Retrieves the constituents data for given RICs
          on a specified target date.
@@ -819,13 +819,13 @@ class EikonDownloader:
     def get_index_data(
             self,
             ric: str,
-            fields: Union[str, List[str]],
+            fields: Union[str, list[str]],
             target_date: Union[str, datetime],
             pre_fix: Optional[str] = None,
             parameters: Optional[dict] = None,
             max_retries: int = 5,
             nan_ratio: float = 0.25
-    ) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    ) -> tuple[Optional[pd.DataFrame], Optional[str]]:
         """
         Retrieves the index data for a given RIC on a specified target date.
 
@@ -914,8 +914,8 @@ class EikonDownloader:
 
     @staticmethod
     def _empty_df_data(
-            rics: Union[str, List[str]],
-            fields: Union[str, List[str]]
+            rics: Union[str, list[str]],
+            fields: Union[str, list[str]]
     ) -> pd.DataFrame:
         """
         Creates an empty DataFrame with RICs as the index and fields
