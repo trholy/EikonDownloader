@@ -743,11 +743,21 @@ class EikonDownloader:
                     )
                     return meta_data_df, None
                 elif err:
-                    self.logger.error(
-                        f"Error downloading of {rics} with fields: {fields}"
-                        f" at {target_date}: {err}. Retrying..."
-                    )
-                    retry_count += 1
+                    if (isinstance(err, list)
+                            and any(e['code'] == 412 for e in err)):
+                        for e in err:
+                            self.logger.warning(
+                                f"Unable to resolve all requested identifiers:"
+                                f" {e['message']}. Returning received data"
+                                f" of {rics} with fields: {fields} at {target_date}."
+                            )
+                        return meta_data_df, None
+                    else:
+                        self.logger.error(
+                            f"Error downloading {rics} with fields: {fields}"
+                            f" at {target_date}: {err}. Retrying..."
+                        )
+                        retry_count += 1
                 else:
                     self.logger.error(
                         f"No data received for {rics} with fields: {fields}"
