@@ -1,389 +1,249 @@
-# `EikonDownloader`
+# EikonDownloader
 
-The `EikonDownloader` class is designed to facilitate the downloading of financial data from the Eikon API. It handles API key configuration, request delays, and error handling to ensure robust data retrieval. The class provides methods to generate target dates, download index chains, ETP chains, index timeseries, stock timeseries, and additional stock data.
+The `EikonDownloader` class is designed to facilitate the downloading of financial data from the Eikon Data API. It includes methods to generate date ranges, retrieve index chains, ETP chains, timeseries data, and constituents data, with built-in error handling and retry mechanisms.
 
-## Constructor
+## Constructor (__init__ method)
 
-```python
-EikonDownloader(api_key, request_delay=1, request_limit_delay=3600, error_delay=5)
-```
+The `__init__` method initializes the `EikonDownloader` class with optional parameters for API key and various delay settings.
 
-**Parameters:**
+### Parameters
 
-- `api_key` : `str`
-  - The Eikon API key to authenticate requests.
-  
-- `request_delay` : `int` or `float`, default=1
-  - The delay (in seconds) between each request to avoid overwhelming the server.
-  
-- `request_limit_delay` : `int` or `float`, default=3600
-  - The delay (in seconds) when the request limit is reached.
-  
-- `error_delay` : `int` or `float`, default=5
-  - The delay (in seconds) to wait after encountering an error.
+- `api_key` (Optional[str]): An optional Eikon API key to authenticate requests. Defaults to `None`.
+- `request_delay` (Optional[Union[int, float]]): The delay in seconds between requests to avoid hitting rate limits. Defaults to `3`.
+- `general_error_delay` (Optional[Union[int, float]]): The delay in minutes to wait when a general error occurs. Defaults to `5`.
+- `gateway_delay` (Optional[Union[int, float]]): The delay in minutes to wait when a Gateway Time-out occurs. Defaults to `5`.
+- `request_limit_delay` (Optional[Union[int, float]]): The delay in hours to wait when a request limit is reached. Defaults to `6`.
+- `proxy_error_delay` (Optional[Union[int, float]]): The delay in hours to wait when a proxy error occurs. Defaults to `6`.
+- `network_error_delay` (Optional[Union[int, float]]): The delay in hours to wait when a network error occurs. Defaults to `1`.
 
 ## Methods
 
-### `generate_target_dates`
+### Public Methods
 
-```python
-EikonDownloader.generate_target_dates(end_date, num_years, frequency, reserve=True)
-```
+#### generate_target_dates
 
-Generate a list of target dates based on the provided parameters.
+Generates a list of target dates based on the specified end date, number of years, and frequency.
 
-**Parameters:**
+##### Parameters
 
-- `end_date` : `str` or `datetime`
-  - The end date to generate target dates from.
-  
-- `num_years` : `int`
-  - The number of years to go back from the `end_date`.
-  
-- `frequency` : `str`
-  - The frequency of target dates, can be one of 'months', 'quarters', or 'years'.
-  
-- `reserve` : `bool`, default=True
-  - If `True`, the returned list of dates will be in reverse order.
+- `end_date` (Union[str, datetime]): The end date for the date range. Can be a string in a format recognized by pandas or a datetime object.
+- `num_years` (int): The number of years to generate dates for. Must be between 1 and 99.
+- `frequency` (str): The frequency of the dates to generate. Must be one of 'months' ('m'), 'quarters' ('q'), or 'years' ('y').
+- `reverse` (bool): If `True`, the list of dates will be reversed so that the most recent date comes first. Defaults to `True`.
 
-**Returns:**
+##### Returns
 
-- `List[str]`
-  - A list of strings representing the target dates in "YYYY-MM-DD" format.
-
-**Raises:**
+- List[str]: A list of date strings in the format 'YYYY-MM-DD'.
 
-- `ValueError`
-  - If an invalid frequency is provided.
+#### generate_decade_dates
 
-### `generate_decade_dates`
+Generates lists of start and end dates for each decade within the specified range.
 
-```python
-EikonDownloader.generate_decade_dates(end_date, num_years=None, start_date=None)
-```
+##### Parameters
 
-Generate start and end dates for each decade within the specified date range.
+- `end_date` (Union[str, datetime, np.datetime64]): The end date for the date range. Can be a string in 'YYYY-MM-DD' format, a datetime object, or a numpy datetime64 object.
+- `num_years` (Optional[int]): The number of years to generate dates for, starting from the `end_date`. If provided, `start_date` is calculated as `end_date` minus `num_years`.
+- `start_date` (Optional[Union[str, datetime, np.datetime64]]): The start date for the date range. Can be a string in 'YYYY-MM-DD' format, a datetime object, or a numpy datetime64 object. If not provided, it is calculated based on `num_years`.
 
-**Parameters:**
+##### Returns
 
-- `end_date` : `str`, `datetime`, or `np.datetime64`
-  - The end date of the date range.
-  
-- `num_years` : `int`, optional
-  - The number of years before the `end_date` to calculate the start date.
-  
-- `start_date` : `str`, `datetime`, or `np.datetime64`, optional
-  - The start date of the date range.
+- Tuple[List[str], List[str]]: A tuple containing two lists of date strings in the format 'YYYY-MM-DD'. The first list contains the start dates of each decade, and the second list contains the end dates of each decade.
 
-**Returns:**
+#### get_index_chain
 
-- `Tuple[List[str], List[str]]`
-  - A tuple containing two lists: start dates and end dates in "YYYY-MM-DD" format.
-
-**Raises:**
-
-- `ValueError`
-  - If `start_date` is later than `end_date`, or if neither `start_date` nor `num_years` is provided.
-
-### `get_index_chain`
-
-```python
-EikonDownloader.get_index_chain(index_ric, target_date, fields, parameters=None, max_retries=10, pre_fix="0#.")
-```
-
-Retrieve the index chain for a given index RIC and target date.
-
-**Parameters:**
-
-- `index_ric` : `str`
-  - The Reuters Instrument Code (RIC) for the index.
-  
-- `target_date` : `str` or `datetime`
-  - The target date for the index data.
-  
-- `fields` : `str` or `List[str]`
-  - The fields to retrieve for the index.
-  
-- `parameters` : `dict`, optional
-  - Optional dictionary of additional parameters for the request.
-  
-- `max_retries` : `int`, default=10
-  - The maximum number of retries to attempt in case of failure.
-  
-- `pre_fix` : `str`, default="0#."
-  - A prefix to be added to the `index_ric` before making the request.
-
-**Returns:**
-
-- `Tuple[pd.DataFrame, Optional[str]]`
-  - A tuple containing a pandas DataFrame with the requested index chain data and an optional error message.
-
-**Raises:**
-
-- `TypeError`
-  - If `index_ric` is not a string.
-
-### `get_etp_chain`
-
-```python
-EikonDownloader.get_etp_chain(etp_ric, target_date, fields, parameters=None, max_retries=10, pre_fix=None)
-```
-
-Download data for a given Exchange Traded Product (ETP) chain at a specific target date.
-
-**Parameters:**
-
-- `etp_ric` : `str`
-  - The Reuters Instrument Code (RIC) for the ETP chain to download data for.
-  
-- `target_date` : `str` or `datetime`
-  - The target date for which to retrieve data.
-  
-- `fields` : `str` or `List[str]`
-  - The fields to retrieve for the ETP chain.
-  
-- `parameters` : `dict`, optional
-  - Optional dictionary of additional parameters for the request.
-  
-- `max_retries` : `int`, default=10
-  - The maximum number of retries to attempt in case of failure.
-  
-- `pre_fix` : `str`, optional
-  - Optional prefix to be added to the `etp_ric` before making the request.
-
-**Returns:**
-
-- `Union[Tuple[None, str], Tuple[pd.DataFrame, None]]`
-  - A tuple containing a pandas DataFrame with the requested ETP chain data if successful, or an error message if an error occurs.
-
-### `get_index_timeseries`
-
-```python
-EikonDownloader.get_index_timeseries(index_ric, end_date, num_years, start_date=None, pre_fix=".", max_retries=10, fields="CLOSE", interval="daily", corax="adjusted", calendar=None, count=None)
-```
-
-Download index data for a given index within a specified date range and merge multiple requests.
-
-**Parameters:**
-
-- `index_ric` : `str`
-  - The Reuters Instrument Code (RIC) for the index to download data for.
-  
-- `end_date` : `str` or `datetime`
-  - The reference date to end the data range.
-  
-- `num_years` : `int`
-  - The number of years to go back from the `end_date` to generate past target dates.
-  
-- `start_date` : `str` or `datetime`, optional
-  - The reference date to start the data range.
-  
-- `pre_fix` : `str`, default="."
-  - Optional prefix to be added to the `index_ric` before making the request.
-  
-- `max_retries` : `int`, default=10
-  - The maximum number of retries in case of failure.
-  
-- `fields` : `str` or `List[str]`, default="CLOSE"
-  - The fields to retrieve for the index.
-  
-- `interval` : `str`, default="daily"
-  - The data interval to retrieve.
-  
-- `corax` : `str`, default="adjusted"
-  - The adjustment type for data.
-  
-- `calendar` : `str`, optional
-  - The calendar type to use.
-  
-- `count` : `int`, optional
-  - The maximum number of data points to retrieve.
-
-**Returns:**
-
-- `Optional[pd.DataFrame]`
-  - A pandas DataFrame with the requested index data, or `None` if no data is retrieved.
-
-**Raises:**
-
-- `TypeError`
-  - If `index_ric` is provided as a list rather than a string.
-
-### `get_stock_timeseries`
-
-```python
-EikonDownloader.get_stock_timeseries(ric, end_date, index_df=None, num_years=None, start_date=None, max_retries=10, fields="CLOSE", interval="daily", corax="adjusted", calendar=None, count=None)
-```
-
-Download stock price data for a given symbol within a specified date range and merge multiple requests.
-
-**Parameters:**
-
-- `ric` : `str`
-  - The stock RIC to download data for.
-  
-- `end_date` : `str` or `datetime`
-  - The reference end date.
-  
-- `index_df` : `pd.DataFrame`, optional
-  - An optional DataFrame to append the retrieved stock data to.
-  
-- `num_years` : `int`, optional
-  - The number of years to generate past target dates.
-  
-- `start_date` : `str` or `datetime`, optional
-  - The reference start date.
-  
-- `max_retries` : `int`, default=10
-  - The maximum number of retries to attempt in case of failure.
-  
-- `fields` : `str` or `List[str]`, default="CLOSE"
-  - The fields to retrieve for the stock.
-  
-- `interval` : `str`, default="daily"
-  - The data interval to retrieve.
-  
-- `corax` : `str`, default="adjusted"
-  - The type of data adjustment.
-  
-- `calendar` : `str`, optional
-  - The calendar type to use.
-  
-- `count` : `int`, optional
-  - The maximum number of data points to retrieve.
-
-**Returns:**
-
-- `pd.DataFrame`
-  - A pandas DataFrame with the retrieved stock data merged with the provided `index_df`, or a new DataFrame if `index_df` is `None`.
-
-**Raises:**
-
-- `TypeError`
-  - If `fields` is not a string or a list of strings.
-
-### `get_additional_data`
-
-```python
-EikonDownloader.get_additional_data(rics, fields, target_date, pre_fix=None, parameters=None, max_retries=10)
-```
-
-Downloads additional stock data for a given list of RICs and fields, with support for retries and error handling.
-
-**Parameters:**
-
-- `rics` : `str` or `List[str]`
-  - The RIC(s) for which additional stock data is to be retrieved.
-  
-- `fields` : `str` or `List[str]`
-  - The fields to retrieve for the given RIC(s).
-  
-- `target_date` : `str` or `datetime`
-  - The target date for the data.
-  
-- `pre_fix` : `str`, optional
-  - An optional prefix to be added to the RIC(s).
-  
-- `parameters` : `dict`, optional
-  - Optional global parameters to include in the request.
-  
-- `max_retries` : `int`, default=10
-  - The maximum number of retries in case of failure.
+Retrieves the index chain data for a specified index RIC at a given target date.
 
-**Returns:**
+##### Parameters
 
-- `Union[pd.DataFrame, Tuple[pd.DataFrame, str]]`
-  - A tuple with a DataFrame containing the downloaded data and an error message (if any).
+- `index_ric` (str): The RIC (Reuters Instrument Code) of the index.
+- `target_date` (Union[str, datetime]): The target date for which to retrieve the index chain data. Can be a string in 'YYYY-MM-DD' format or a datetime object.
+- `fields` (Union[str, List[str]]): The fields to retrieve. Can be a single field as a string or a list of fields.
+- `parameters` (Optional[dict]): Additional parameters to pass to the Eikon API. Defaults to `None`.
+- `max_retries` (int): The maximum number of retries to attempt if the request fails. Defaults to `5`.
+- `pre_fix` (Optional[str]): A prefix to prepend to the index RIC. Defaults to `"0#."`.
 
-**Raises:**
+##### Returns
 
-- Returns a tuple of (empty DataFrame, error message) in case of failure after maximum retries.
+- Tuple[pd.DataFrame, Optional[str]]: A tuple containing a DataFrame with the index chain data and an optional error message. If the data retrieval is successful, the error message will be `None`.
 
-### `_empty_df_chain`
+#### get_etp_chain
 
-```python
-EikonDownloader._empty_df_chain(ric)
-```
+Retrieves the ETP chain data for a given ETP RIC on a specified target date.
 
-Creates an empty DataFrame with a single column corresponding to the given RIC, filled with NaN values.
+##### Parameters
 
-**Parameters:**
+- `etp_ric` (str): The RIC (Reuters Instrument Code) of the ETP.
+- `target_date` (Union[str, datetime]): The date for which to retrieve the ETP chain data.
+- `fields` (Union[str, List[str]]): The fields to retrieve.
+- `parameters` (Optional[dict]): Additional parameters to pass to the data retrieval function. Defaults to `None`.
+- `max_retries` (int): Maximum number of retries in case of failure. Defaults to `5`.
+- `pre_fix` (Optional[str]): Prefix to be used in logging. Defaults to `None`.
 
-- `ric` : `str`
-  - The RIC to be used as the column name for the DataFrame.
+##### Returns
 
-**Returns:**
+- Union[Tuple[None, str], Tuple[pd.DataFrame, None]]: A tuple containing the ETP chain data as a pandas DataFrame and an error message.
 
-- `pd.DataFrame`
-  - An empty DataFrame with a column named after the provided RIC and a row of NaN values.
+#### get_index_timeseries
 
-### `_empty_df_data`
+Retrieves the timeseries data for a given index RIC within a specified date range.
 
-```python
-EikonDownloader._empty_df_data(rics, fields)
-```
+##### Parameters
 
-Creates an empty DataFrame with NaN values for the specified RICs and fields.
+- `index_ric` (str): The RIC (Reuters Instrument Code) of the index.
+- `end_date` (Union[str, datetime]): The end date for the timeseries data.
+- `num_years` (Optional[int]): The number of years of data to retrieve.
+- `start_date` (Optional[Union[str, datetime]]): The start date for the timeseries data.
+- `pre_fix` (Union[str, None]): Prefix to be added to the index RIC. Defaults to `"."`.
+- `max_retries` (int): Maximum number of retries in case of failure. Defaults to `5`.
+- `fields` (Union[str, List[str]]): The fields to retrieve. Defaults to `'CLOSE'`.
+- `interval` (str): The interval of the timeseries data (e.g., 'daily', 'weekly'). Defaults to `"daily"`.
+- `corax` (str): The type of price adjustment ('adjusted', 'unadjusted'). Defaults to `'adjusted'`.
+- `calendar` (Optional[str]): The calendar to use for the timeseries data. Defaults to `None`.
+- `count` (Optional[int]): The number of data points to retrieve. Defaults to `None`.
 
-**Parameters:**
+##### Returns
 
-- `rics` : `List[str]`
-  - A list of RICs to be used as columns in the DataFrame.
-  
-- `fields` : `List[str]`
-  - A list of fields to be used as columns in the DataFrame, alongside the RICs.
+- Tuple[Optional[pd.DataFrame], Optional[str]]: A tuple containing the timeseries data as a pandas DataFrame and an error message.
 
-**Returns:**
+#### get_stock_timeseries
 
-- `pd.DataFrame`
-  - An empty DataFrame with columns for the RICs and fields, and a single row filled with NaN values.
+Retrieves the timeseries data for a given stock RIC within a specified date range.
 
-### `_apply_request_delay`
+##### Parameters
 
-```python
-EikonDownloader._apply_request_delay()
-```
+- `ric` (str): The RIC (Reuters Instrument Code) of the stock.
+- `end_date` (Union[str, datetime]): The end date for the timeseries data.
+- `index_df` (Optional[pd.DataFrame]): An optional DataFrame to join the retrieved data with. Defaults to `None`.
+- `num_years` (Optional[int]): The number of years of data to retrieve.
+- `start_date` (Optional[Union[str, datetime]]): The start date for the timeseries data.
+- `max_retries` (int): Maximum number of retries in case of failure. Defaults to `5`.
+- `fields` (Union[str, List[str]]): The fields to retrieve. Defaults to `'CLOSE'`.
+- `interval` (str): The interval of the timeseries data (e.g., 'daily', 'weekly'). Defaults to `"daily"`.
+- `corax` (str): The type of price adjustment ('adjusted', 'unadjusted'). Defaults to `'adjusted'`.
+- `calendar` (Optional[str]): The calendar to use for the timeseries data. Defaults to `None`.
+- `count` (Optional[int]): The number of data points to retrieve. Defaults to `None`.
 
-Applies a delay between requests if the delay time is specified and greater than zero.
+##### Returns
 
-**Returns:**
+- Tuple[pd.DataFrame, Optional[str]]: A tuple containing the timeseries data as a pandas DataFrame and an error message.
 
-- `None`
+#### get_constituents_data
 
-### `_apply_request_limit_delay`
+Retrieves the constituents data for given RICs on a specified target date.
 
-```python
-EikonDownloader._apply_request_limit_delay()
-```
+##### Parameters
 
-Applies a delay when the request limit is reached, based on the specified delay time.
+- `rics` (Union[str, List[str]]): The RICs (Reuters Instrument Codes) for which to retrieve data.
+- `fields` (Union[str, List[str]]): The fields to retrieve.
+- `target_date` (Union[str, datetime]): The date for which to retrieve the data.
+- `pre_fix` (Optional[str]): Prefix to be added to each RIC. Defaults to `None`.
+- `parameters` (Optional[dict]): Additional parameters to pass to the data retrieval function. Defaults to `None`.
+- `max_retries` (int): Maximum number of retries in case of failure. Defaults to `5`.
 
-**Returns:**
+##### Returns
 
-- `None`
+- Tuple[pd.DataFrame, Optional[str]]: A tuple containing the constituents data as a pandas DataFrame and an error message.
 
-### `_unpack_tuple`
+#### get_index_data
 
-```python
-EikonDownloader._unpack_tuple(object_)
-```
+Retrieves the index data for a given RIC on a specified target date.
 
-Unpacks a tuple returned by `ek.get_data` to extract the DataFrame.
+##### Parameters
 
-**Parameters:**
+- `ric` (str): The RIC (Reuters Instrument Code) of the index.
+- `fields` (Union[str, List[str]]): The fields to retrieve.
+- `target_date` (Union[str, datetime]): The date for which to retrieve the data.
+- `pre_fix` (Optional[str]): Prefix to be added to the RIC. Defaults to `None`.
+- `parameters` (Optional[dict]): Additional parameters to pass to the data retrieval function. Defaults to `None`.
+- `max_retries` (int): Maximum number of retries in case of failure. Defaults to `5`.
+- `nan_ratio` (float): The maximum allowed ratio of NaN values in the data. Defaults to `0.25`.
 
-- `object_` : `tuple` or `pd.DataFrame`
-  - The input object, which can either be a tuple or a DataFrame.
+##### Returns
 
-**Returns:**
+- Tuple[Optional[pd.DataFrame], Optional[str]]: A tuple containing the index data as a pandas DataFrame and an error message.
 
-- `pd.DataFrame`
-  - The extracted DataFrame if the input is a tuple containing one, or the DataFrame itself if the input is already a DataFrame.
+### Hidden/Protected Methods
 
-**Raises:**
+#### _empty_df_chain
 
-- `ValueError`
-  - If the tuple is empty.
-  
-- `TypeError`
-  - If the first element of the tuple is not a DataFrame, or if the input is neither a tuple nor a DataFrame.
+Creates an empty DataFrame with a single column named after the given RIC and a single NaN value.
+
+##### Parameters
+
+- `ric` (str): The RIC (Reuters Instrument Code) to be used as the column name.
+
+##### Returns
+
+- pd.DataFrame: A pandas DataFrame with one column named after the RIC and one NaN value.
+
+##### Raises
+
+- ValueError: If the RIC is `None` or an empty string.
+- TypeError: If the RIC is not a string.
+
+#### _empty_df_data
+
+Creates an empty DataFrame with RICs as the index and fields as columns, filled with NaN values.
+
+##### Parameters
+
+- `rics` (Union[str, List[str]]): The RICs (Reuters Instrument Codes) to be used as the index.
+- `fields` (Union[str, List[str]]): The fields to be used as the columns.
+
+##### Returns
+
+- pd.DataFrame: A pandas DataFrame with RICs as the index and fields as columns, filled with NaN values.
+
+##### Raises
+
+- ValueError: If RICs or fields are an empty list or string.
+- TypeError: If RICs or fields are not a list or string.
+
+#### _apply_request_delay
+
+Applies a delay to the request by sleeping for a specified number of seconds.
+
+##### Returns
+
+- None
+
+#### _apply_request_limit_delay
+
+Applies a delay due to request limits by sleeping for a specified number of seconds.
+
+##### Returns
+
+- None
+
+#### _apply_proxy_error_delay
+
+Applies a delay due to proxy errors by sleeping for a specified number of seconds.
+
+##### Returns
+
+- None
+
+#### _apply_error_delay
+
+Applies a delay due to general errors by sleeping for a specified number of seconds.
+
+##### Returns
+
+- None
+
+#### _unpack_tuple
+
+Unpacks a tuple to extract the first element if it is a pandas DataFrame, or returns the DataFrame directly if the input is a DataFrame.
+
+##### Parameters
+
+- `object_` (Union[tuple, pd.DataFrame]): The input object to unpack.
+
+##### Returns
+
+- pd.DataFrame: A pandas DataFrame extracted from the tuple or the input DataFrame.
+
+##### Raises
+
+- ValueError: If the input tuple is empty.
+- TypeError: If the first element of the tuple is not a DataFrame or if the input is neither a tuple nor a DataFrame.
