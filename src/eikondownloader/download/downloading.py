@@ -697,9 +697,6 @@ class EikonDownloader:
         :return: A tuple containing the constituents data as a pandas DataFrame
          and an error message; Tuple[pd.DataFrame, Optional[str]]
         """
-        if isinstance(pre_fix, str) and isinstance(rics, str):
-            rics = pre_fix + rics
-
         if isinstance(rics, str):
             rics = [rics]
 
@@ -739,7 +736,7 @@ class EikonDownloader:
                         and meta_data_df.shape[0] > int(len(rics) * 0.1)):
                     self.logger.info(
                         f"Successfully downloaded {rics} with fields: {fields}"
-                        f"at {target_date}."
+                        f" at {target_date}."
                     )
                     return meta_data_df, None
                 elif err:
@@ -761,7 +758,8 @@ class EikonDownloader:
                 else:
                     self.logger.error(
                         f"No data received for {rics} with fields: {fields}"
-                        f"at {target_date}. Retrying...")
+                        f" at {target_date}. Retrying..."
+                    )
                     retry_count += 1
 
             except ek.EikonError as err:
