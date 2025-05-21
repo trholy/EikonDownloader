@@ -36,15 +36,17 @@ The package provides a comprehensive set of tools for handling financial data. H
 
 The `EikonDownloader` class allows you to download financial data from the Eikon API.
 
+Have an look on the example usage scripts.
+
+
+#### Download Index Chain
+
 ```python
-from financial_data_downloader import EikonDownloader
+from eikondownloader import EikonDownloader
 
 # Initialize EikonDownloader
 eikon_downloader = EikonDownloader(
-    api_key="your-api-key",
-    request_delay=1,
-    request_limit_delay=3600,
-    error_delay=5
+    api_key="your-api-key"
 )
 
 # Download index chain data
@@ -53,8 +55,49 @@ eikon_downloader.get_index_chain(
     target_date="your-target-date",
     fields="your-fields",
     parameters=None,
-    max_retries=10,
+    max_retries=5,
     pre_fix="0#."
+)
+```
+
+#### Download stock specific data
+
+```python
+from eikondownloader import EikonDownloader
+
+# Initialize EikonDownloader
+eikon_downloader = EikonDownloader(
+    api_key="your-api-key"
+)
+
+# Download stock specific data
+eikon_downloader.get_constituents_data(
+    rics="your-rics",
+    fields="your-fields",
+    target_date="your-target-date",
+    max_retries=5
+)
+```
+
+#### Download time series
+
+```python
+from eikondownloader import EikonDownloader
+
+# Initialize EikonDownloader
+eikon_downloader = EikonDownloader(
+    api_key="your-api-key"
+)
+
+# Download time series
+index_df, err = eikon_downloader.get_stock_timeseries(
+    ric="your-ric",
+    end_date="your-end-date",
+    start_date="your-start-date",
+    max_retries=5,
+    fields='CLOSE',
+    interval="daily",
+    corax='adjusted'
 )
 ```
 
@@ -63,7 +106,7 @@ eikon_downloader.get_index_chain(
 The `OSDownloader` class allows you to download files from a MinIO server.
 
 ```python
-from financial_data_downloader import OSDownloader
+from eikondownloader import OSDownloader
 
 # Initialize OSDownloader
 os_downloader = OSDownloader(
@@ -79,8 +122,7 @@ os_downloader = OSDownloader(
 
 # Download files from MinIO server
 os_downloader.download_bucket(
-    bucket_name="your-bucket-name",
-    folder_prefix="your-folder-prefix"
+    bucket_name="your-bucket-name"
 )
 ```
 
@@ -89,7 +131,7 @@ os_downloader.download_bucket(
 The `OSUploader` class allows you to upload files to a MinIO server with parallel uploads and data integrity checks.
 
 ```python
-from financial_data_downloader import OSUploader
+from eikondownloader import OSUploader
 
 # Initialize OSUploader
 os_uploader = OSUploader(
@@ -106,7 +148,6 @@ os_uploader = OSUploader(
 
 # Upload files to MinIO server
 os_uploader.upload_directory(
-    remote_prefix="your-remote-prefix",
     check_for_existence=False
 )
 ```
@@ -116,7 +157,7 @@ os_uploader.upload_directory(
 The `DataProcessor` class allows you to extract, convert, and filter financial data for further analysis.
 
 ```python
-from financial_data_downloader import DataProcessor
+from eikondownloader import DataProcessor
 
 # Initialize DataProcessor
 data_processor = DataProcessor(
@@ -184,15 +225,9 @@ eikondownloader/
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
 
-## Attribution
-
-When using or adapting this software, please give appropriate credit to the original author:  
-Thomas R. Holy ([thomas.robert.holy@gmail.com](mailto:thomas.robert.holy@gmail.com)).
-
-
 ## Authors & Maintainers
 
-- Thomas R. Holy, Ernst-Abbe-Hochschule Jena, (thomas.robert.holy@gmail.com)
+- Thomas R. Holy, Ernst-Abbe-Hochschule Jena
 
 ## Contributing
 
